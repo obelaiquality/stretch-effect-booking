@@ -1,0 +1,28 @@
+.tse-grid2 { display: grid; gap: var(--s4); }
+@media (min-width: 860px) { .tse-grid2 { grid-template-columns: 1.1fr 1fr; align-items: start; } }
+.tse-stack { display: grid; gap: var(--s4); }
+.tse-credit-card { display: grid; gap: var(--s4); }
+.tse-prompt { border-left: 3px solid var(--red); background: var(--red-wash); padding: var(--s4); border-radius: var(--r-btn); display: grid; gap: var(--s3); justify-items: start; }
+.tse-ledger { list-style: none; margin: 0; padding: 0; }
+.tse-ledger li { display: flex; justify-content: space-between; gap: var(--s4); padding: 12px 0; border-bottom: 1px solid var(--line); }
+.tse-ledger li:last-child { border-bottom: 0; }
+.tse-delta { font-family: var(--font-display); font-size: 22px; min-width: 2ch; text-align: right; }
+.tse-delta.pos { color: var(--ok); }
+.tse-delta.neg { color: var(--silver); }
+.tse-sectionhead { display: flex; justify-content: space-between; align-items: baseline; gap: var(--s3); margin-bottom: var(--s3); }
+.tse-packs { display: grid; gap: var(--s4); }
+@media (min-width: 760px) { .tse-packs { grid-template-columns: repeat(3, 1fr); } }
+.tse-pack { display: grid; gap: var(--s3); align-content: start; }
+.tse-pack-price { font-family: var(--font-display); font-size: 48px; line-height: 1; }
+.tse-pack-sessions { font-family: var(--font-display); text-transform: uppercase; font-size: 28px; line-height: 1; }
+.tse-confirm-rows { display: grid; gap: var(--s2); margin: 0; }
+.tse-confirm-rows div { display: flex; justify-content: space-between; gap: var(--s4); border-bottom: 1px solid var(--line); padding-bottom: var(--s2); }
+.tse-confirm-rows dt { color: var(--muted); }
+.tse-confirm-rows dd { margin: 0; font-weight: 600; text-align: right; }
+.tse-success { display: grid; gap: var(--s4); justify-items: start; padding: var(--s6) var(--s5); }
+.tse-success-mark { width: 48px; height: 48px; display: grid; place-items: center; background: var(--ok-wash); border: 1px solid var(--ok); color: var(--ok); border-radius: var(--r-btn); }
+.tse-demo-panel { border: 1px dashed var(--line-2); border-radius: var(--r-card); padding: var(--s4); display: grid; gap: var(--s3); margin-top: var(--s5); }
+.tse-authcard { max-width: 460px; margin: 0 auto; padding: var(--s6) 0 var(--s8); }
+.tse-code { font-family: var(--font-display); font-size: 36px; letter-spacing: 0.12em; color: var(--white); }
+.tse-bookings-list { display: grid; gap: var(--s3); }
+.tse-bookings-list .rise { animation-delay: 0ms; }

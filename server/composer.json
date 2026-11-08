@@ -1,0 +1,25 @@
+{
+  "name": "obel/stretch-effect-server",
+  "description": "The Stretch Effect booking backend (no runtime dependencies; Composer is for tests only)",
+  "type": "project",
+  "license": "proprietary",
+  "require": {
+    "php": ">=8.2",
+    "ext-pdo": "*",
+    "ext-sodium": "*",
+    "ext-curl": "*"
+  },
+  "require-dev": {
+    "phpunit/phpunit": "^11.5"
+  },
+  "autoload": {
+    "psr-4": { "StretchEffect\\": "src/" }
+  },
+  "autoload-dev": {
+    "psr-4": { "StretchEffect\\Tests\\": "tests/" }
+  },
+  "scripts": {
+    "test": "phpunit"
+  },
+  "config": { "sort-packages": true }
+}

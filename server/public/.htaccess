@@ -1,0 +1,25 @@
+# Front controller for the PHP backend. Everything that is not a real file goes to index.php.
+Options -Indexes -MultiViews
+DirectoryIndex index.php
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # Pass the Authorization header through to PHP (needed for the ChatGPT connector bearer token).
+  RewriteCond %{HTTP:Authorization} .
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule ^ index.php [L]
+</IfModule>
+
+<IfModule mod_setenvif.c>
+  SetEnvIf Authorization "(.*)" HTTP_AUTHORIZATION=$1
+</IfModule>
+
+# Never serve dotfiles (.htaccess, .env, .git ...) except the ACME / well-known folder.
+<FilesMatch "^\.(?!well-known)">
+  Require all denied
+</FilesMatch>
+<FilesMatch "\.(sqlite|sql|log|md|json|lock|bak|dist)$">
+  Require all denied
+</FilesMatch>
