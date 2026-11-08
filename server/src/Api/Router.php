@@ -9,6 +9,7 @@ use StretchEffect\Contracts\HttpRequest;
 use StretchEffect\Contracts\HttpResponse;
 use StretchEffect\Contracts\RouteHandler;
 use StretchEffect\Contracts\Services;
+use StretchEffect\OAuth\Pairing;
 use StretchEffect\Services\Totp;
 use StretchEffect\Support\Presenter;
 use StretchEffect\Support\Time;
@@ -60,6 +61,9 @@ final class Router implements RouteHandler
             ['GET', '/api/admin/grants', 'adminGrants'],
             ['POST', '#^/api/admin/grants/([0-9a-f]{16})/revoke$#', 'adminRevoke'],
             ['GET', '/api/admin/audit', 'adminAudit'],
+            ['GET', '/api/admin/connector/pairing', 'adminPairing'],
+            ['POST', '/api/admin/connector/pairing', 'adminPairingOpen'],
+            ['POST', '/api/admin/connector/pairing/close', 'adminPairingClose'],
             ['POST', '/api/cron/sync', 'cronSync'],
         ];
     }
@@ -180,7 +184,12 @@ final class Router implements RouteHandler
         if (!$this->app->rateLimiter()->hit('signup_ip', $this->req->ip, 10, 3600)) {
             throw new DomainError('rate_limited', 'Too many sign-ups from this address. Please try again later.');
         }
-        $name = $in->str('name', 1, 120);
+        $name = $in->str('name', 1, 80);
+        // Letters (any script), spaces, apostrophe, hyphen, full stop. No newlines, digits, symbols or markup: names are shown to
+        // the owner's ChatGPT, so free-form text here would be a prompt-injection channel.
+        if (preg_match('/^\p{L}[\p{L}\p{M} \'\x{2019}.\-]*\z/u', (string) $name) !== 1) {
+            throw new DomainError('validation', "name may only contain letters, spaces and ' - .");
+        }
         $email = $in->email();
         $phone = $in->str('phone', 5, 40, false);
         if ($phone !== null && !preg_match('/^[0-9 +()\-]{5,40}$/', $phone)) {
@@ -231,7 +240,7 @@ final class Router implements RouteHandler
     private function totp(): HttpResponse
     {
         $code = $this->in()->str('code', 6, 8);
-        $user = $this->app->auth()->completeTotp((string) $code);
+        $user = $this->app->auth()->completeTotp((string) $code, $this->req->ip);
         if ($user === null) {
             throw new DomainError('unauthorized', 'That code is not valid. Try the next code from your authenticator app.');
         }
@@ -476,6 +485,28 @@ final class Router implements RouteHandler
         $this->app->grants()->revoke($id);
         $this->adminAudit_((string) $o['id'], 'grant.revoke', ['grantId' => $id], 'Connector grant revoked');
         return $this->ok(['ok' => true]);
+    }
+
+    private function adminPairing(): HttpResponse
+    {
+        $this->owner();
+        return $this->ok((new Pairing($this->app))->status());
+    }
+
+    private function adminPairingOpen(): HttpResponse
+    {
+        $o = $this->owner();
+        $st = (new Pairing($this->app))->open();
+        $this->adminAudit_((string) $o['id'], 'connector_pairing_open', ['until' => $st['until']], 'Connector pairing window opened for ' . Pairing::MINUTES . ' minutes');
+        return $this->ok($st);
+    }
+
+    private function adminPairingClose(): HttpResponse
+    {
+        $o = $this->owner();
+        $st = (new Pairing($this->app))->close();
+        $this->adminAudit_((string) $o['id'], 'connector_pairing_close', [], 'Connector pairing window closed by owner');
+        return $this->ok($st);
     }
 
     private function adminAudit(): HttpResponse

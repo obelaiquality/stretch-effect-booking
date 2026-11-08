@@ -48,4 +48,22 @@ final class GrantService
             $this->db->run('UPDATE oauth_tokens SET revoked_at = ? WHERE grant_id = ? AND revoked_at IS NULL', [$now, $grantId]);
         });
     }
+
+    /**
+     * Revoke every connector grant (and its tokens) approved by this user. Call it whenever the user's password or
+     * authenticator secret changes, so a stolen connection does not survive a credential reset.
+     * @return int grants revoked
+     */
+    public function revokeAllForUser(string $userId, string $reason = 'credentials_changed'): int
+    {
+        $now = Time::toDb($this->db->now());
+        return $this->db->transaction(function () use ($userId, $now, $reason): int {
+            $n = $this->db->run('UPDATE oauth_grants SET revoked_at = ?, revoke_reason = ? WHERE user_id = ? AND revoked_at IS NULL', [$now, mb_substr($reason, 0, 80), $userId]);
+            $this->db->run(
+                'UPDATE oauth_tokens SET revoked_at = ? WHERE revoked_at IS NULL AND grant_id IN (SELECT id FROM oauth_grants WHERE user_id = ?)',
+                [$now, $userId]
+            );
+            return $n;
+        });
+    }
 }

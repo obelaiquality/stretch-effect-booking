@@ -151,8 +151,9 @@ export const TOOLS: ToolDef[] = [
         booking_id: p.bookingId,
         refund_credit: { type: 'boolean', description: 'true to give the session back to the client.' },
         reason: p.reason,
+        idempotency_key: p.idem,
       },
-      ['booking_id', 'refund_credit', 'reason'],
+      ['booking_id', 'refund_credit', 'reason', 'idempotency_key'],
     ),
     annotations: DESTRUCTIVE, scope: 'bookings:write', write: true,
   },
@@ -160,7 +161,10 @@ export const TOOLS: ToolDef[] = [
     name: 'reschedule_booking',
     title: 'Reschedule a booking',
     description: 'Moves a future confirmed booking to another free time (local time, Africa/Johannesburg). Costs no extra session.',
-    inputSchema: obj({ booking_id: p.bookingId, new_start: p.localStart('New local start, YYYY-MM-DDTHH:MM.') }, ['booking_id', 'new_start']),
+    inputSchema: obj(
+      { booking_id: p.bookingId, new_start: p.localStart('New local start, YYYY-MM-DDTHH:MM.'), idempotency_key: p.idem },
+      ['booking_id', 'new_start', 'idempotency_key'],
+    ),
     annotations: WRITE, scope: 'bookings:write', write: true,
   },
 ];

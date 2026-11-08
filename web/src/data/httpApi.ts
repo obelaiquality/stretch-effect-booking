@@ -37,10 +37,13 @@
  * | adminGrants             | GET /api/admin/grants                                         |
  * | adminRevokeGrant        | POST /api/admin/grants/{id}/revoke                            |
  * | adminAudit              | GET /api/admin/audit?limit=                                   |
+ * | adminPairing            | GET /api/admin/connector/pairing                              |
+ * | adminOpenPairing        | POST /api/admin/connector/pairing                             |
+ * | adminClosePairing       | POST /api/admin/connector/pairing/close                       |
  *
  * demoCallTool and demoReset are not implemented in http mode.
  */
-import type { Api, LoginResult, SignupInput } from './api';
+import type { Api, LoginResult, PairingWindow, SignupInput } from './api';
 import { ApiError } from '../domain/types';
 import type {
   AuditEntry,
@@ -207,4 +210,7 @@ export const httpApi: Api = {
     await call<unknown>('POST', `/api/admin/grants/${enc(id)}/revoke`, {});
   },
   adminAudit: (limit) => call<AuditEntry[]>('GET', `/api/admin/audit${qs({ limit })}`),
+  adminPairing: () => call<PairingWindow>('GET', '/api/admin/connector/pairing'),
+  adminOpenPairing: () => call<PairingWindow>('POST', '/api/admin/connector/pairing', {}),
+  adminClosePairing: () => call<PairingWindow>('POST', '/api/admin/connector/pairing/close', {}),
 };

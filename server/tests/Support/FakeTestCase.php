@@ -33,6 +33,8 @@ abstract class FakeTestCase extends TestCase
     protected FakeServices $svc;
     protected FakeCimdFetcher $cimd;
     public const REDIRECT = 'https://chatgpt.com/connector_platform_oauth_redirect';
+    /** Open the pairing window whenever a test builds an authorize request. Tests of the closed window switch it off. */
+    protected bool $autoPair = true;
 
     protected function setUp(): void
     {
@@ -88,6 +90,9 @@ abstract class FakeTestCase extends TestCase
     /** @param array<string,string> $over */
     protected function authorizeQuery(string $clientId, string $challenge, array $over = []): array
     {
+        if ($this->autoPair) {
+            (new \StretchEffect\OAuth\Pairing($this->svc))->open(); // the owner clicked "Allow a new connection"
+        }
         return $over + [
             'response_type' => 'code', 'client_id' => $clientId, 'redirect_uri' => self::REDIRECT,
             'code_challenge' => $challenge, 'code_challenge_method' => 'S256', 'state' => 'st-' . bin2hex(random_bytes(4)),

@@ -42,5 +42,12 @@ The client is `web/src/data/httpApi.ts`; the `Api` interface is `web/src/data/ap
 | adminGrants             | GET /api/admin/grants                                         |
 | adminRevokeGrant        | POST /api/admin/grants/{id}/revoke                            |
 | adminAudit              | GET /api/admin/audit?limit=                                   |
+| adminConnectorPairing   | GET /api/admin/connector/pairing -> {open, until}             |
+| adminOpenPairing        | POST /api/admin/connector/pairing -> {open, until}            |
+| adminClosePairing       | POST /api/admin/connector/pairing/close -> {open, until}      |
+
+**Pairing window** (owner only, CSRF required on the POSTs). `POST /api/admin/connector/pairing` opens a 15-minute window in which `/oauth/authorize` accepts a ChatGPT client that has no active grant yet; `until` is an ISO UTC time (`null` when closed). The window closes by itself after 15 minutes, when the owner closes it, and as soon as a grant is created for a new client (single use). Clients that already have a non-revoked grant can re-authorise without it. Opening and closing are written to the audit log (`connector_pairing_open`, `connector_pairing_close`), as are refused authorisations (`oauth_pairing_refused`). Setting key: `connector_pairing_until` in the `settings` table.
+
+`POST /api/auth/signup`: `name` is 1-80 characters of letters (any script), spaces, apostrophe, hyphen and full stop only.
 
 `GET /api/csrf` -> `{token}` (no auth needed).

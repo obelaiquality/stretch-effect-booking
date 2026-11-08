@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace StretchEffect\OAuth;
 
+use StretchEffect\Contracts\DomainError;
 use StretchEffect\Contracts\HttpRequest;
 use StretchEffect\Contracts\HttpResponse;
 use StretchEffect\Contracts\RouteHandler;
@@ -21,6 +22,7 @@ final class OAuthRoutes implements RouteHandler
     private Services $s;
     private TokenStore $tokens;
     private ClientRegistry $clients;
+    private Pairing $pairing;
 
     public function __construct(private ?CimdFetcher $fetcher = null) {}
 
@@ -39,6 +41,7 @@ final class OAuthRoutes implements RouteHandler
         $this->fetcher ??= new HttpCimdFetcher(is_array($hosts) ? array_values(array_filter($hosts, 'is_string')) : []);
         $this->tokens = new TokenStore($services);
         $this->clients = new ClientRegistry($services, $this->fetcher);
+        $this->pairing = new Pairing($services);
 
         try {
             return match ($path) {
@@ -244,18 +247,32 @@ final class OAuthRoutes implements RouteHandler
         }
         $requested = Scopes::normalize($requested);
 
+        // A client with no active grant needs the owner-opened pairing window (see Pairing). Checked after the redirect
+        // is validated, so nothing is ever redirected to an unvalidated address.
+        $isNew = !$this->pairing->clientHasActiveGrant($client['client_id']);
+        if ($isNew && !$this->pairing->isOpen()) {
+            return $this->pairingRequired($client['client_id'], (string) $client['client_name'], $r->ip);
+        }
+
         $reqId = $this->s->crypto()->randomToken(24);
         $csrf = $this->s->crypto()->randomToken(24);
         $this->saveAuthRequest($reqId, [
             'client_id' => $client['client_id'], 'client_name' => $client['client_name'],
             'redirect_uri' => $redirect, 'state' => $state, 'code_challenge' => $challenge,
             'resource' => $this->tokens->resource(), 'scopes' => $requested,
-            'csrf_hash' => $this->s->crypto()->hash($csrf), 'attempts' => 0,
+            'csrf_hash' => $this->s->crypto()->hash($csrf), 'attempts' => 0, 'registered' => $client['created_at'],
         ]);
         $this->audit(null, 'anonymous', 'oauth_authorize_view', ['client_id' => $client['client_id']], 'ok', 'consent page shown to ' . $client['client_name'], $r->ip);
         return $this->page(ConsentPage::consent(
             ['name' => $client['client_name'], 'client_id' => $client['client_id']],
-            (string) (parse_url($redirect, PHP_URL_HOST) ?? ''), $requested, $reqId, $csrf, null));
+            $redirect, $requested, $reqId, $csrf, null, '', (string) $client['created_at'], $isNew));
+    }
+
+    private function pairingRequired(string $clientId, string $clientName, string $ip): HttpResponse
+    {
+        $this->audit(null, 'anonymous', 'oauth_pairing_refused', ['client_id' => $clientId], 'denied',
+            'authorize refused: no active grant and pairing window closed (' . $clientName . ')', $ip);
+        return $this->page(ConsentPage::pairingRequired(), 403);
     }
 
     private function authorizePost(HttpRequest $r): HttpResponse
@@ -286,11 +303,18 @@ final class OAuthRoutes implements RouteHandler
             return $this->errorPage('Choose Allow or Deny.');
         }
 
-        $again = function (string $msg, int $status = 200) use ($rec, $reqId, $csrf, $redirect, $f): HttpResponse {
+        $again = function (string $msg, int $status = 200) use ($rec, $reqId, $csrf, $redirect, $f, $clientId): HttpResponse {
             return $this->page(ConsentPage::consent(
                 ['name' => (string) $rec['client_name'], 'client_id' => (string) $rec['client_id']],
-                (string) (parse_url($redirect, PHP_URL_HOST) ?? ''), $rec['scopes'], $reqId, $csrf, $msg, substr($this->str($f['email'] ?? ''), 0, 190)), $status);
+                $redirect, $rec['scopes'], $reqId, $csrf, $msg, substr($this->str($f['email'] ?? ''), 0, 190),
+                (string) ($rec['registered'] ?? ''), !$this->pairing->clientHasActiveGrant($clientId)), $status);
         };
+
+        // The window may have closed (or the request may predate it) since the consent page was shown.
+        if (!$this->pairing->clientHasActiveGrant($clientId) && !$this->pairing->isOpen()) {
+            $this->consumeAuthRequest($reqId);
+            return $this->pairingRequired($clientId, (string) $rec['client_name'], $r->ip);
+        }
 
         // Brute-force guard: counts every Allow attempt from this IP (5 per 15 minutes).
         if (!$this->s->rateLimiter()->hit('oauth_consent', $r->ip, 5, 900)) {
@@ -311,9 +335,14 @@ final class OAuthRoutes implements RouteHandler
         if ($email === '' || $password === '' || strlen($password) > 1024 || preg_match('/^\d{6}$/', $totp) !== 1) {
             return $again($generic);
         }
-        $user = $this->s->auth()->verifyPassword($email, $password, $r->ip);
-        $ok = $user !== null && ($user['role'] ?? '') === 'owner' && isset($user['id'])
-            && $this->s->auth()->verifyTotp((string) $user['id'], $totp);
+        try {
+            $user = $this->s->auth()->verifyPassword($email, $password, $r->ip);
+            $ok = $user !== null && ($user['role'] ?? '') === 'owner' && isset($user['id'])
+                && $this->s->auth()->verifyTotp((string) $user['id'], $totp, $r->ip);
+        } catch (DomainError $e) {
+            $this->audit(null, 'anonymous', 'oauth_login', ['client_id' => $clientId], 'rate_limited', 'sign-in throttled on consent page', $r->ip);
+            return $again('Too many attempts, try again in 15 minutes.', 429);
+        }
         if (!$ok) {
             $this->audit(null, 'anonymous', 'oauth_login', ['client_id' => $clientId], 'denied', 'owner sign-in failed on consent page', $r->ip);
             return $again($generic);
@@ -467,6 +496,7 @@ final class OAuthRoutes implements RouteHandler
             return $this->oauthError('invalid_grant', 'The code is invalid or expired.');
         }
         $scopes = Scopes::parse((string) $row['scopes']);
+        $newClient = !$this->pairing->clientHasActiveGrant((string) $row['client_id']);
         $pair = $this->s->db()->transaction(function () use ($row, $scopes, $hash) {
             $grantId = $this->tokens->createGrant((string) $row['client_id'], (string) $row['user_id'], $scopes, (string) $row['resource']);
             // oauth_codes has no grant column: remember code -> grant so a replayed code can revoke the grant.
@@ -476,6 +506,11 @@ final class OAuthRoutes implements RouteHandler
         });
         if (!isset($pair['access_token'])) {
             return $this->oauthError('invalid_grant', 'The grant is no longer valid.');
+        }
+        if ($newClient) {
+            // Single use: the pairing window closes as soon as a grant exists for a new client.
+            $this->pairing->close();
+            $this->audit($pair['grant_id'], 'owner:' . $row['user_id'], 'connector_pairing_close', [], 'ok', 'pairing window closed: new connection created', $r->ip);
         }
         $this->audit($pair['grant_id'], 'owner:' . $row['user_id'], 'oauth_token', ['client_id' => $clientId, 'grant' => 'authorization_code'], 'ok', 'tokens issued', $r->ip);
         return $this->tokenResponse($pair, implode(' ', $scopes));

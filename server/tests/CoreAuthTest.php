@@ -50,11 +50,11 @@ final class CoreAuthTest extends TestCase
         $app = CoreTestKit::app();
         CoreTestKit::client($app);
         for ($i = 0; $i < 5; $i++) {
-            $this->assertNull($app->auth()->verifyPassword('client@example.com', 'wrong-password', '10.0.0.' . $i));
+            $this->assertNull($app->auth()->verifyPassword('client@example.com', 'wrong-password', '10.0.0.1'));
         }
         $this->expectException(DomainError::class);
         $this->expectExceptionMessage('Too many');
-        $app->auth()->verifyPassword('client@example.com', 'correct-horse-battery', '10.0.0.99');
+        $app->auth()->verifyPassword('client@example.com', 'correct-horse-battery', '10.0.0.1');
     }
 
     public function testLoginRateLimitPerIpAndWindowReset(): void

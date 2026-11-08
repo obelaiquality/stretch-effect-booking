@@ -138,7 +138,7 @@ final class ClientRegistry
     // ---------------------------------------------------------------- lookup (DCR row or CIMD document)
 
     /**
-     * @return array{client_id:string,client_name:string,redirect_uris:list<string>,registration:string}
+     * @return array{client_id:string,client_name:string,redirect_uris:list<string>,registration:string,created_at:string}
      * @throws \RuntimeException when the client is unknown or its metadata is unacceptable
      */
     public function find(string $clientId): array
@@ -164,6 +164,7 @@ final class ClientRegistry
             'client_name' => $row['client_name'],
             'redirect_uris' => is_array($uris) ? array_values(array_filter($uris, 'is_string')) : [],
             'registration' => $row['registration'],
+            'created_at' => (string) ($row['created_at'] ?? ''),
         ];
     }
 

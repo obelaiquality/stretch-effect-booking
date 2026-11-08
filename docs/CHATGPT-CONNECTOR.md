@@ -15,6 +15,8 @@ This lets the owner ask ChatGPT things like "who is booked tomorrow?" or "add 5 
 
 ## Add the connector
 
+**First, open the pairing window.** A brand-new ChatGPT connection is refused unless you allow it first. Sign in to the admin page, open **Admin > ChatGPT** and click **Allow a new connection** (this calls `POST /api/admin/connector/pairing`). The window stays open for 15 minutes and closes by itself once the connection is made. If you skip this step, the sign-in window shows "To connect a new ChatGPT, open Admin > ChatGPT and click 'Allow a new connection', then try again within 15 minutes." Reconnecting an app that was already connected and not revoked does not need it.
+
 The menu names have changed several times; look for whichever of these exists in your account.
 
 1. Open chatgpt.com in a browser and sign in.
@@ -28,7 +30,7 @@ The menu names have changed several times; look for whichever of these exists in
 5. Tick the box that says you trust this server, then **Create**.
 6. ChatGPT contacts the site, finds the sign-in details itself and opens a sign-in window on **your own domain**. Check the address bar shows your domain over https before typing anything.
 7. On the page that says "Connect an app to your bookings":
-   * check the **client** and **Returns to: chatgpt.com** lines,
+   * check the **client**, the **Registered** date (it should be from the last few minutes) and the full **Returns to** address (it should start with `https://chatgpt.com/`); a red "This is a new connection" notice is normal on a first connect,
    * choose which permissions to allow (see below),
    * enter the owner **email**, **password** and the current **6-digit authenticator code**,
    * press **Allow**. Press **Deny** if you did not just start this.

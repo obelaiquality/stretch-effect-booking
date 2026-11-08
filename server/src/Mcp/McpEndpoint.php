@@ -308,6 +308,7 @@ final class McpEndpoint implements RouteHandler
             return $this->toolError($id, 'The server could not complete that. Nothing was changed. Try again, or use the admin page.');
         }
 
+        $out['data']['untrusted_fields'] = Tools::untrustedFields($name);
         $result = [
             'content' => [['type' => 'text', 'text' => $out['summary']]],
             'structuredContent' => $out['data'],

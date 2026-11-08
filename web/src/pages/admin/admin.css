@@ -692,3 +692,19 @@ code {
   border-radius: 2px;
   overflow-wrap: anywhere;
 }
+
+/* Pairing window for new ChatGPT connections */
+.pairing {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--s4);
+  flex-wrap: wrap;
+  margin-top: var(--s4);
+  padding: var(--s4);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-input);
+}
+.pairing > div {
+  flex: 1 1 260px;
+}

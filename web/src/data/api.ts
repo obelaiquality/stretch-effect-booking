@@ -29,6 +29,11 @@ export interface LoginResult {
   needsTotp?: boolean;
 }
 
+export interface PairingWindow {
+  open: boolean;
+  until: string | null;
+}
+
 export interface McpCallResult {
   ok: boolean;
   /** JSON result returned to ChatGPT */
@@ -82,6 +87,10 @@ export interface Api {
   adminGrants(): Promise<ConnectorGrant[]>;
   adminRevokeGrant(grantId: string): Promise<void>;
   adminAudit(limit?: number): Promise<AuditEntry[]>;
+  /** Pairing window: a NEW ChatGPT connection can only be approved while it is open (15 minutes). */
+  adminPairing(): Promise<PairingWindow>;
+  adminOpenPairing(): Promise<PairingWindow>;
+  adminClosePairing(): Promise<PairingWindow>;
 
   // ---- Demo only: run an MCP tool the same way ChatGPT would (simulation page).
   demoCallTool?(tool: string, args: Record<string, unknown>): Promise<McpCallResult>;

@@ -111,6 +111,8 @@ See `docs/SECURITY.md` for the threat model. Non-negotiable:
    `audit_log` (tool, args hash + redacted args, result status, token id, IP).
 8. Write tools need an `idempotency_key`; the same key returns the first result and does not apply
    twice. Credit changes are capped (1–20 per call, 40 per day via ChatGPT) and need a reason.
+   New connections are gated by an owner-opened 15-minute **pairing window** (`POST /api/admin/connector/pairing`),
+   single use; see `docs/SECURITY.md`. Payment references are once-only forever (`payment_references`, migration 002).
 9. Owner admin page lists connector grants with **Revoke** and shows the audit log.
 10. Security headers on every response: CSP, X-Content-Type-Options, Referrer-Policy,
     frame-ancestors 'none' (except none needed), HSTS (live only).

@@ -84,7 +84,8 @@ describe('tool definitions', () => {
     const add = TOOLS.find((t) => t.name === 'add_session_credits')!;
     expect(add.inputSchema.required).toEqual(['client_id', 'sessions', 'reason', 'idempotency_key']);
     expect(add.scope).toBe('credits:write');
-    expect(TOOLS.find((t) => t.name === 'cancel_booking')!.inputSchema.required).toEqual(['booking_id', 'refund_credit', 'reason']);
+    expect(TOOLS.find((t) => t.name === 'cancel_booking')!.inputSchema.required).toEqual(['booking_id', 'refund_credit', 'reason', 'idempotency_key']);
+    expect(TOOLS.find((t) => t.name === 'reschedule_booking')!.inputSchema.required).toEqual(['booking_id', 'new_start', 'idempotency_key']);
   });
   it('validator rejects bad input', () => {
     const s = TOOLS.find((t) => t.name === 'add_session_credits')!.inputSchema;
@@ -189,14 +190,14 @@ describe('runTool writes', () => {
   });
   it('cancel_booking refunds when asked and reports the new balance', async () => {
     const { ctx } = makeCtx();
-    const r = await runTool('cancel_booking', { booking_id: 'b_1', refund_credit: true, reason: 'Client asked' }, ctx);
+    const r = await runTool('cancel_booking', { booking_id: 'b_1', refund_credit: true, reason: 'Client asked', idempotency_key: key('j') }, ctx);
     expect(r.ok).toBe(true);
     expect((r.result as { refunded: boolean; sessions_left: number }).sessions_left).toBe(4);
-    expect((await runTool('cancel_booking', { booking_id: 'b_1', refund_credit: true, reason: 'again' }, ctx)).ok).toBe(false);
+    expect((await runTool('cancel_booking', { booking_id: 'b_1', refund_credit: true, reason: 'again', idempotency_key: key('k') }, ctx)).ok).toBe(false);
   });
   it('reschedule_booking moves a future booking', async () => {
     const { ctx, st } = makeCtx();
-    const r = await runTool('reschedule_booking', { booking_id: 'b_1', new_start: '2026-11-13T08:00' }, ctx);
+    const r = await runTool('reschedule_booking', { booking_id: 'b_1', new_start: '2026-11-13T08:00', idempotency_key: key('l') }, ctx);
     expect(r.ok).toBe(true);
     expect(st.bookings[0].start).toBe('2026-11-13T06:00:00.000Z');
   });

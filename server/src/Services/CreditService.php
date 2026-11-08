@@ -62,7 +62,7 @@ final class CreditService implements CreditServiceContract
 
     public function markPackPaid(string $packRequestId, ?string $paymentReference, string $actor): array
     {
-        $ref = $paymentReference === null ? null : mb_substr(trim($paymentReference), 0, 80);
+        $ref = $paymentReference === null ? null : PaymentReferences::normalize($paymentReference);
         $ref = $ref === '' ? null : $ref;
         return $this->db->transaction(function () use ($packRequestId, $ref, $actor): array {
             $pack = $this->db->one('SELECT * FROM pack_requests WHERE id = ?' . $this->db->forUpdate(), [$packRequestId]);
@@ -71,6 +71,10 @@ final class CreditService implements CreditServiceContract
             }
             if ($pack['status'] !== 'pending') {
                 throw new DomainError('conflict', 'This pack request is already ' . $pack['status']);
+            }
+            if ($ref !== null) {
+                // Same once-only table as the ChatGPT tool: one EFT reference cannot be used through both paths.
+                PaymentReferences::claim($this->db->pdo(), $ref, (string) $pack['user_id'], 'admin', Time::toDb($this->db->now()));
             }
             try {
                 $this->db->run(

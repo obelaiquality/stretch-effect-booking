@@ -26,6 +26,8 @@ export interface DemoState {
   idem: Record<string, unknown>;
   /** timestamps (ms) of recent ChatGPT calls for demo rate limits */
   callLog: Array<{ at: number; write: boolean }>;
+  /** ms timestamp until which a new ChatGPT connection may be approved */
+  pairingUntil?: number;
 }
 
 /** SHA-256 hex of "tse-demo:" + password. The live server uses Argon2id; this is a demo. */

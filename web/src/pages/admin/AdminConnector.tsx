@@ -126,7 +126,7 @@ const CHIPS: Chip[] = [
       if (!g?.ok) return failed(h, g);
       const next = (g.result as R).upcoming_bookings[0];
       if (!next) return h.say(`${c.name} has no upcoming bookings to cancel.`);
-      const r = await h.call('cancel_booking', { booking_id: next.booking_id, refund_credit: true, reason: 'Cancelled by the owner via ChatGPT, session refunded' });
+      const r = await h.call('cancel_booking', { booking_id: next.booking_id, refund_credit: true, reason: 'Cancelled by the owner via ChatGPT, session refunded', idempotency_key: newKey() });
       if (!r?.ok) return failed(h, r);
       const x = r.result as R;
       h.say(`I cancelled ${x.client_name} on ${whenOf(x.start)} and gave the session back. ${x.client_name.split(' ')[0]} now has ${x.sessions_left}.`);
@@ -173,7 +173,16 @@ export default function AdminConnector() {
   const demo = typeof api.demoCallTool === 'function';
   const grants = useLoad(() => api.adminGrants());
   const audit = useLoad(() => api.adminAudit(30));
+  const pairing = useLoad(() => api.adminPairing());
   const toast = useToast();
+  const togglePairing = async (open: boolean) => {
+    try {
+      await (open ? api.adminOpenPairing() : api.adminClosePairing());
+      pairing.reload();
+    } catch (e) {
+      toast.show(errText(e), true);
+    }
+  };
   const [revoking, setRevoking] = useState<ConnectorGrant | null>(null);
   const [resetting, setResetting] = useState(false);
 
@@ -313,6 +322,21 @@ export default function AdminConnector() {
               </li>
             ))}
           </ul>
+          <div className="pairing">
+            <div>
+              <strong>New connection</strong>
+              <p className="small muted" style={{ margin: '4px 0 0' }}>
+                {pairing.data?.open
+                  ? `Open until ${fmtWhen(pairing.data.until!)}. Add the connector in ChatGPT now and sign in. The window closes after one connection.`
+                  : 'Closed. A new ChatGPT can only connect within 15 minutes after you open this. This stops look-alike sign-in links.'}
+              </p>
+            </div>
+            {pairing.data?.open ? (
+              <button className="btn btn-ghost btn-sm" onClick={() => void togglePairing(false)}>Close</button>
+            ) : (
+              <button className="btn btn-red btn-sm" onClick={() => void togglePairing(true)}>Allow a new connection</button>
+            )}
+          </div>
           <p className="small silver kill">
             <strong>Kill switch.</strong> Revoke ends access straight away. The next request from that connection is refused, and its tokens stop working. You can connect again later with your password and 2FA.
           </p>

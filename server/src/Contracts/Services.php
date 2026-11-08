@@ -44,7 +44,7 @@ interface AuthService
     /** Check email + password (rate limited by caller's IP). @return array<string,mixed>|null user row */
     public function verifyPassword(string $email, string $password, string $ip): ?array;
     /** Check a 6-digit TOTP code for this user; rejects reuse of the same time step. */
-    public function verifyTotp(string $userId, string $code): bool;
+    public function verifyTotp(string $userId, string $code, string $ip = ''): bool;
     public function csrfToken(): string;
     public function checkCsrf(?string $token): bool;
 }

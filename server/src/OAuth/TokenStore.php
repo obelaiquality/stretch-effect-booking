@@ -95,6 +95,12 @@ final class TokenStore
         if (!hash_equals($this->resource(), (string) $r['resource'])) {
             return null;
         }
+        // A grant only ever acts as the owner who approved it: if that user is gone or no longer the owner, the token is dead.
+        $u = $this->s->db()->pdo()->prepare('SELECT role FROM users WHERE id = ?');
+        $u->execute([(string) $r['user_id']]);
+        if ($u->fetchColumn() !== 'owner') {
+            return null;
+        }
         return [
             'grant_id' => (string) $r['grant_id'],
             'client_id' => (string) $r['client_id'],

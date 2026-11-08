@@ -522,6 +522,22 @@ export const demoApi: Api = {
     if (!g) throw new ApiError('not_found', 'Grant not found.');
     save(() => void (g.revokedAt = g.revokedAt ?? iso(nowMs())));
   },
+  async adminPairing() {
+    requireOwner();
+    const until = state().pairingUntil ?? 0;
+    return until > nowMs() ? { open: true, until: iso(until) } : { open: false, until: null };
+  },
+  async adminOpenPairing() {
+    requireOwner();
+    const until = nowMs() + 15 * 60_000;
+    save((s) => void (s.pairingUntil = until));
+    return { open: true, until: iso(until) };
+  },
+  async adminClosePairing() {
+    requireOwner();
+    save((s) => void (s.pairingUntil = 0));
+    return { open: false, until: null };
+  },
   async adminAudit(limit = 50): Promise<AuditEntry[]> {
     requireOwner();
     return [...state().audit].sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);

@@ -44,7 +44,12 @@ final class AuthService implements AuthServiceContract
     {
         $email = strtolower(trim($email));
         $emailKey = hash('sha256', $email);
-        if (!$this->limiter->hit('login_ip', $ip, 20, 900) || !$this->limiter->hit('login_email', $emailKey, 5, 900)) {
+        $pairKey = hash('sha256', $email . '|' . $ip);
+        // Strict limiter per email+IP (a stranger cannot burn the owner's own budget from another address); a looser
+        // per-email limiter still slows a distributed guesser. All three are one generic message.
+        if (!$this->limiter->hit('login_ip', $ip, 20, 900)
+            || !$this->limiter->hit('login_email_ip', $pairKey, 5, 900)
+            || !$this->limiter->hit('login_email', $emailKey, 30, 900)) {
             throw new DomainError('rate_limited', 'Too many sign-in attempts. Please wait a few minutes and try again.');
         }
         $row = $this->db->one('SELECT ' . self::PUBLIC_COLS . ', password_hash FROM users WHERE email = ?', [$email]);
@@ -55,6 +60,7 @@ final class AuthService implements AuthServiceContract
         if ($row === null || !$ok) {
             return null;
         }
+        $this->limiter->reset('login_email_ip', $pairKey);
         $this->limiter->reset('login_email', $emailKey);
         if (password_needs_rehash($row['password_hash'], defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_DEFAULT)) {
             $this->db->run('UPDATE users SET password_hash = ? WHERE id = ?', [self::hashPassword($password), $row['id']]);
@@ -65,9 +71,10 @@ final class AuthService implements AuthServiceContract
 
     // ---------- TOTP ----------
 
-    public function verifyTotp(string $userId, string $code): bool
+    public function verifyTotp(string $userId, string $code, string $ip = ''): bool
     {
-        if (!$this->limiter->hit('totp', $userId, 8, 900)) {
+        // Per user+IP (8 / 15 min) and per user (30 / 15 min): a stranger on another address cannot exhaust the owner's attempts.
+        if (!$this->limiter->hit('totp_ip', $userId . '|' . ($ip === '' ? '-' : $ip), 8, 900) || !$this->limiter->hit('totp', $userId, 30, 900)) {
             throw new DomainError('rate_limited', 'Too many attempts. Please wait a few minutes and try again.');
         }
         $row = $this->db->one('SELECT totp_secret_enc, totp_enabled, totp_last_step FROM users WHERE id = ?', [$userId]);
@@ -123,14 +130,14 @@ final class AuthService implements AuthServiceContract
     }
 
     /** @return array<string,mixed>|null the user when the code is right */
-    public function completeTotp(string $code): ?array
+    public function completeTotp(string $code, string $ip = ''): ?array
     {
         $p = $this->session->get('pending_totp');
         if (!is_array($p) || !isset($p['uid']) || $this->db->now()->getTimestamp() - (int) $p['at'] > 600) {
             $this->session->remove('pending_totp');
             throw new DomainError('unauthorized', 'Sign in with your password first.');
         }
-        if ($this->verifyTotp((string) $p['uid'], $code)) {
+        if ($this->verifyTotp((string) $p['uid'], $code, $ip)) {
             $this->startSession((string) $p['uid']);
             return $this->userById((string) $p['uid']);
         }

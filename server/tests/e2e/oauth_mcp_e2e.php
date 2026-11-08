@@ -11,6 +11,9 @@ declare(strict_types=1);
  * The database needs the owner and at least one client whose email contains "example" (bin/seed-demo.php does this).
  * Plays the part of ChatGPT: 401 discovery, metadata, DCR, PKCE S256, consent as the owner (password + TOTP),
  * code exchange, MCP calls, idempotent write replay, refresh rotation, then refresh-token reuse (grant must die).
+ * A brand-new client may only reach the consent page while the owner has opened the pairing window, so the script first proves
+ * authorize is refused with the window closed, then signs in to the web API as the owner (cookie jar + CSRF, password + TOTP)
+ * and calls POST /api/admin/connector/pairing, exactly as the admin page's "Allow a new connection" button does.
  * Exit code 0 only when every step passes.
  */
 
@@ -50,10 +53,13 @@ function must(bool $ok): void
 }
 
 /** @return array{int,array<string,string>,string} */
-function http(string $method, string $url, array $headers = [], ?string $body = null): array
+function http(string $method, string $url, array $headers = [], ?string $body = null, ?string $jar = null): array
 {
     $h = [];
     $ch = curl_init($url);
+    if ($jar !== null) {
+        curl_setopt_array($ch, [CURLOPT_COOKIEFILE => $jar, CURLOPT_COOKIEJAR => $jar]);
+    }
     curl_setopt_array($ch, [
         CURLOPT_CUSTOMREQUEST => $method, CURLOPT_RETURNTRANSFER => true, CURLOPT_FOLLOWLOCATION => false,
         CURLOPT_TIMEOUT => 20, CURLOPT_HTTPHEADER => $headers,
@@ -113,6 +119,18 @@ function tool(string $base, string $token, string $name, array $args): array
     return $d['result'] ?? ['isError' => true, 'content' => [['text' => json_encode($d)]]];
 }
 
+/** Web API call as the signed-in owner (cookie jar + CSRF header). @return array{int,mixed} */
+function web(string $base, string $jar, string $method, string $path, ?array $body = null): array
+{
+    $headers = ['Content-Type: application/json'];
+    if ($method !== 'GET') {
+        [, , $c] = http('GET', $base . '/api/csrf', [], null, $jar);
+        $headers[] = 'X-CSRF-Token: ' . (json_decode($c, true)['token'] ?? '');
+    }
+    [$st, , $out] = http($method, $base . $path, $headers, $body === null ? null : json_encode($body), $jar);
+    return [$st, json_decode($out, true)];
+}
+
 echo "Target: $base\n\n";
 
 // 1. unauthenticated call -> 401 with resource_metadata
@@ -153,8 +171,29 @@ $q = ['response_type' => 'code', 'client_id' => $clientId, 'redirect_uri' => $re
     'state' => $state, 'resource' => $base . '/mcp', 'scope' => 'bookings:read bookings:write clients:read credits:write'];
 [$st, $h] = http('GET', $as['authorization_endpoint'] . '?' . http_build_query(array_diff_key($q, ['code_challenge' => 1]), '', '&', PHP_QUERY_RFC3986));
 step('authorize without PKCE is refused (redirect with error)', $st === 302 && str_contains($h['location'] ?? '', 'error=invalid_request'), (string) ($h['location'] ?? ''));
+[$st, , $page] = http('GET', $as['authorization_endpoint'] . '?' . http_build_query($q, '', '&', PHP_QUERY_RFC3986));
+step('authorize for a NEW client is refused (403) while the pairing window is closed',
+    $st === 403 && str_contains($page, 'Allow a new connection') && !str_contains($page, 'name="password"'), "HTTP $st");
+
+// The owner opens the pairing window: sign in on the web API (password, then TOTP), then POST /api/admin/connector/pairing.
+$jar = tempnam(sys_get_temp_dir(), 'se-e2e-jar');
+[$st, $j] = web($base, $jar, 'POST', '/api/auth/login', ['email' => $email, 'password' => $password]);
+step('owner web sign-in step 1 (password) asks for TOTP', $st === 200 && ($j['needsTotp'] ?? false) === true, json_encode($j));
+must($st === 200);
+// The previous 30 s step is still accepted (one step of drift) and leaves the current step free for the consent form below.
+[$st, $j] = web($base, $jar, 'POST', '/api/auth/totp', ['code' => totp($totpSecret, time() - 30)]);
+step('owner web sign-in step 2 (TOTP)', $st === 200 && ($j['user']['role'] ?? '') === 'owner', json_encode($j));
+must($st === 200);
+[$st, $j] = web($base, $jar, 'GET', '/api/admin/connector/pairing');
+step('pairing window starts closed', $st === 200 && ($j['open'] ?? true) === false && array_key_exists('until', $j) && $j['until'] === null, json_encode($j));
+[$st, $j] = web($base, $jar, 'POST', '/api/admin/connector/pairing');
+step('owner opens the pairing window (15 minutes)', $st === 200 && ($j['open'] ?? false) === true && isset($j['until']), json_encode($j));
+must($st === 200);
+
 [$st, $h, $page] = http('GET', $as['authorization_endpoint'] . '?' . http_build_query($q, '', '&', PHP_QUERY_RFC3986));
 step('GET authorize renders the consent page', $st === 200 && str_contains($page, 'name="totp"') && str_contains($page, 'ChatGPT (e2e)'));
+step('consent page shows the full redirect URI, the registration date and the new-connection notice',
+    str_contains($page, $redirect) && str_contains($page, 'Registered:') && str_contains($page, 'This is a new connection'));
 step('consent page is not frameable', str_contains($h['content-security-policy'] ?? '', "frame-ancestors 'none'") && ($h['cache-control'] ?? '') !== '', $h['content-security-policy'] ?? '');
 preg_match('/name="req" value="([^"]+)"/', $page, $a);
 preg_match('/name="csrf" value="([^"]+)"/', $page, $b);
@@ -195,6 +234,15 @@ step('token exchange with the right verifier', $st === 200 && isset($tok['access
 must(isset($tok['access_token']));
 $access = $tok['access_token'];
 $refresh = $tok['refresh_token'];
+[$st, $j] = web($base, $jar, 'GET', '/api/admin/connector/pairing');
+step('the pairing window closed itself when the grant was created (single use)', $st === 200 && ($j['open'] ?? true) === false, json_encode($j));
+[$st, , $body] = http('POST', $as['registration_endpoint'], ['Content-Type: application/json'],
+    json_encode(['client_name' => 'ChatGPT (second)', 'redirect_uris' => ['https://chatgpt.com/connector/oauth/e2e-second'], 'token_endpoint_auth_method' => 'none']));
+$reg2 = json_decode($body, true) ?? [];
+[$st] = http('GET', $as['authorization_endpoint'] . '?' . http_build_query(['client_id' => $reg2['client_id'] ?? 'x', 'redirect_uri' => 'https://chatgpt.com/connector/oauth/e2e-second'] + $q, '', '&', PHP_QUERY_RFC3986));
+step('a second NEW client is refused again after the window closed', $st === 403, "HTTP $st");
+[$st] = http('GET', $as['authorization_endpoint'] . '?' . http_build_query(array_diff_key($q, ['state' => 1]) + ['state' => b64u(random_bytes(8))], '', '&', PHP_QUERY_RFC3986));
+step('the already-connected client may re-authorise without the window', $st === 200, "HTTP $st");
 
 // 7. MCP
 [$st, , $d] = mcp($base, $access, 'initialize', ['protocolVersion' => '2025-11-25', 'capabilities' => (object) [], 'clientInfo' => ['name' => 'e2e', 'version' => '1']]);
@@ -206,7 +254,7 @@ step('notifications/initialized -> 202', $st === 202);
 $names = array_column($d['result']['tools'] ?? [], 'name');
 step('tools/list returns the 11 tools', $st === 200 && count($names) === 11 && in_array('add_session_credits', $names, true), implode(',', $names));
 $res = tool($base, $access, 'get_schedule', []);
-step('get_schedule', ($res['isError'] ?? true) === false && isset($res['structuredContent']['bookings']), json_encode($res));
+step('get_schedule (carries untrusted_fields)', ($res['isError'] ?? true) === false && isset($res['structuredContent']['bookings']) && isset($res['structuredContent']['untrusted_fields']), json_encode($res));
 $res = tool($base, $access, 'search_clients', ['query' => 'example']);
 $cid = $res['structuredContent']['clients'][0]['client_id'] ?? null;
 step('search_clients finds a client (seed demo data first if this fails)', $cid !== null, json_encode($res));
@@ -221,6 +269,8 @@ step('replay with the same idempotency_key returns the first result and does not
     ($r2['isError'] ?? true) === false && ($r2['structuredContent']['replayed'] ?? false) === true && ($r2['structuredContent']['new_balance'] ?? -1) === $before + 1, json_encode($r2));
 $after = tool($base, $access, 'get_client', ['client_id' => $cid]);
 step('balance went up by exactly 1', ($after['structuredContent']['balance'] ?? -1) === $before + 1, json_encode($after));
+$dup = tool($base, $access, 'add_session_credits', ['payment_reference' => strtolower(' ' . $add['payment_reference'] . ' '), 'idempotency_key' => 'e2e-' . bin2hex(random_bytes(6))] + $add);
+step('the same payment reference with other case and spaces is refused', ($dup['isError'] ?? false) === true && str_contains(json_encode($dup), 'already been used'), json_encode($dup));
 $bad = tool($base, $access, 'add_session_credits', ['sessions' => 99] + $add);
 step('invalid arguments are rejected (isError)', ($bad['isError'] ?? false) === true);
 $undo = tool($base, $access, 'remove_session_credits', ['client_id' => $cid, 'sessions' => 1, 'reason' => 'e2e cleanup', 'idempotency_key' => 'e2e-' . bin2hex(random_bytes(6))]);
@@ -246,6 +296,7 @@ step('reuse revoked the whole grant: the newest access token now gets 401', $st 
 [$st] = http('POST', $as['token_endpoint'], ['Content-Type: application/x-www-form-urlencoded'], $tokenForm([
     'grant_type' => 'refresh_token', 'refresh_token' => $tok2['refresh_token'], 'client_id' => $clientId]));
 step('the newest refresh token is dead too', $st === 400);
+@unlink($jar);
 
 echo "\n" . ($failures === 0 ? 'ALL PASSED' : "$failures STEP(S) FAILED") . "\n";
 exit($failures === 0 ? 0 : 1);

@@ -42,7 +42,9 @@ final class FakeDatabase implements Database
     public function __construct()
     {
         $this->pdo = new \PDO('sqlite::memory:', null, null, [\PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION, \PDO::ATTR_DEFAULT_FETCH_MODE => \PDO::FETCH_ASSOC]);
-        $this->pdo->exec((string) file_get_contents(__DIR__ . '/../../migrations/sqlite/001_init.sql'));
+        foreach (['001_init.sql', '002_security_hardening.sql'] as $f) {
+            $this->pdo->exec((string) file_get_contents(__DIR__ . '/../../migrations/sqlite/' . $f));
+        }
         $this->now = new \DateTimeImmutable('2026-11-09 08:00:00', new \DateTimeZone('UTC'));
     }
     public function pdo(): \PDO { return $this->pdo; }
@@ -111,7 +113,7 @@ final class FakeAuth implements AuthService
         unset($u['password_hash'], $u['totp_secret_enc']);
         return $u;
     }
-    public function verifyTotp(string $userId, string $code): bool
+    public function verifyTotp(string $userId, string $code, string $ip = ''): bool
     {
         $secret = $this->totpSecrets[$userId] ?? null;
         if ($secret === null) {

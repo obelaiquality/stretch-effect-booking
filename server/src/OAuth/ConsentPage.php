@@ -49,6 +49,8 @@ input:focus-visible,button:focus-visible{outline:2px solid var(--red-hi);outline
 button{flex:1;min-height:44px;padding:12px;font-size:16px;font-weight:600;border-radius:2px;border:1px solid var(--line);background:var(--panel);color:var(--white);cursor:pointer}
 button.go{background:var(--red);border-color:var(--red)}
 button.go:hover{background:var(--red-hi)}
+.new{background:#3a0a12;border:2px solid var(--red-hi);color:var(--white);padding:12px;border-radius:4px;margin:0 0 16px;font-weight:600}
+.uri{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:13px;word-break:break-all;color:var(--white)}
 .err{background:#2a0a10;border:1px solid var(--red);color:var(--white);padding:12px;border-radius:4px;margin:0 0 16px}
 .fine{color:var(--muted);font-size:13px;margin-top:16px}
 </style>
@@ -69,15 +71,25 @@ HTML;
         return self::shell('Sign-in problem', "<div class=\"card\"><h1>This request cannot continue</h1><p>{$m}</p></div>");
     }
 
+    /** Shown when a brand-new client reaches /oauth/authorize while the owner has not opened the pairing window. */
+    public static function pairingRequired(): string
+    {
+        return self::shell('Connection not allowed yet', '<div class="card"><h1>This connection is not allowed yet</h1>'
+            . "<p>To connect a new ChatGPT, open Admin &rarr; ChatGPT and click 'Allow a new connection', then try again within 15 minutes.</p>"
+            . '<p class="fine">If you did not just try to connect ChatGPT to The Stretch Effect, ignore this page. Nothing was changed.</p></div>');
+    }
+
     /**
      * @param array{name:string,client_id:string} $client
      * @param list<string> $requestedScopes
      */
-    public static function consent(array $client, string $redirectHost, array $requestedScopes, string $reqId, string $csrf, ?string $error, string $email = ''): string
+    public static function consent(array $client, string $redirectUri, array $requestedScopes, string $reqId, string $csrf, ?string $error, string $email = '', string $registered = '', bool $isNew = false): string
     {
         $name = self::e($client['name']);
         $cid = self::e($client['client_id']);
-        $host = self::e($redirectHost);
+        $uri = self::e($redirectUri);
+        $reg = $registered !== '' ? self::e(substr($registered, 0, 16) . ' UTC') : 'unknown';
+        $newHtml = $isNew ? '<div class="new" role="alert">This is a new connection. Only continue if you just clicked &lsquo;Allow a new connection&rsquo; in Admin and started this from your own ChatGPT.</div>' : '';
         $scopeRows = '';
         foreach ($requestedScopes as $s) {
             $label = self::e(Scopes::DESCRIPTIONS[$s] ?? $s);
@@ -94,7 +106,8 @@ HTML;
 <div class="card">
 <h1>Connect an app to your bookings</h1>
 <p>Only the owner of The Stretch Effect can approve this. Sign in with your password and your authenticator code.</p>
-<div class="who"><strong>{$name}</strong><small>Client: {$cid}</small><small>Returns to: {$host}</small></div>
+<div class="who"><strong>{$name}</strong><small>Client: {$cid}</small><small>Registered: {$reg}</small><small>Returns to:</small><span class="uri">{$uri}</span></div>
+{$newHtml}
 {$errHtml}
 <form method="post" action="/oauth/authorize" autocomplete="off">
 <input type="hidden" name="req" value="{$req}">

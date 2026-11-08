@@ -272,8 +272,8 @@ final class McpTest extends FakeTestCase
         $t = $this->connect();
         $r = $this->call($t['access'], 'search_clients', ['query' => 'IGNORE']);
         $this->assertStringNotContainsString('IGNORE', $r['content'][0]['text']);
-        $this->assertStringContainsString('IGNORE', $r['structuredContent']['clients'][0]['name']);
-        $this->assertStringNotContainsString("\n", $r['structuredContent']['clients'][0]['name']);
+        $this->assertStringContainsString('IGNORE', $r['structuredContent']['clients'][0]['untrusted_name']);
+        $this->assertStringNotContainsString("\n", $r['structuredContent']['clients'][0]['untrusted_name']);
         $r = $this->call($t['access'], 'get_client', ['client_id' => $this->svc->clientId]);
         $this->assertStringNotContainsString('IGNORE', $r['content'][0]['text']);
         $r = $this->call($t['access'], 'add_session_credits', ['client_id' => $this->svc->clientId, 'sessions' => 1, 'reason' => 'ok', 'idempotency_key' => $this->key()]);
@@ -410,18 +410,18 @@ final class McpTest extends FakeTestCase
         $this->assertSame('chatgpt', $r['structuredContent']['created_by']);
         $this->assertSame(1, $r['structuredContent']['new_balance']);
 
-        $r = $this->call($t['access'], 'reschedule_booking', ['booking_id' => $id, 'new_start' => '2026-11-13T10:00']);
+        $r = $this->call($t['access'], 'reschedule_booking', ['booking_id' => $id, 'new_start' => '2026-11-13T10:00', 'idempotency_key' => $this->key()]);
         $this->assertFalse($r['isError']);
         $this->assertSame('2026-11-13 10:00', $r['structuredContent']['start_local']);
 
-        $r = $this->call($t['access'], 'cancel_booking', ['booking_id' => $id, 'refund_credit' => true, 'reason' => 'client asked']);
+        $r = $this->call($t['access'], 'cancel_booking', ['booking_id' => $id, 'refund_credit' => true, 'reason' => 'client asked', 'idempotency_key' => $this->key()]);
         $this->assertFalse($r['isError']);
         $this->assertTrue($r['structuredContent']['refunded']);
         $this->assertSame(2, $this->svc->creditSvc->balance($this->svc->clientId));
         // domain errors come back as tool errors with the service message, not as a crash
-        $r = $this->call($t['access'], 'cancel_booking', ['booking_id' => $id, 'refund_credit' => true, 'reason' => 'again']);
+        $r = $this->call($t['access'], 'cancel_booking', ['booking_id' => $id, 'refund_credit' => true, 'reason' => 'again', 'idempotency_key' => $this->key()]);
         $this->assertTrue($r['isError']);
-        $this->assertTrue($this->call($t['access'], 'cancel_booking', ['booking_id' => 'nope', 'refund_credit' => false, 'reason' => 'x'])['isError']);
+        $this->assertTrue($this->call($t['access'], 'cancel_booking', ['booking_id' => 'nope', 'refund_credit' => false, 'reason' => 'x', 'idempotency_key' => $this->key()])['isError']);
         foreach (['2026-11-12T09:00', '2026-11-14T09:00'] as $when) {
             $this->assertFalse($this->call($t['access'], 'create_booking', ['client_id' => $this->svc->clientId, 'start' => $when, 'idempotency_key' => $this->key()])['isError']);
         }
@@ -477,7 +477,7 @@ final class McpTest extends FakeTestCase
         $this->call($t['access'], 'add_session_credits', ['client_id' => $this->svc->clientId, 'sessions' => 2, 'reason' => $long, 'payment_reference' => 'EFT-2', 'idempotency_key' => 'audit-key-01']);
         $this->call($t['access'], 'search_clients', ['query' => 'Thandi secret query that is rather long indeed ok']);
         $this->call($t['access'], 'get_schedule', ['bogus' => 1]);
-        $rows = $this->svc->database->pdo->query("SELECT * FROM audit_log WHERE grant_id IS NOT NULL AND action NOT LIKE 'oauth%' ORDER BY rowid")->fetchAll();
+        $rows = $this->svc->database->pdo->query("SELECT * FROM audit_log WHERE grant_id IS NOT NULL AND action NOT LIKE 'oauth%' AND action NOT LIKE 'connector_pairing%' ORDER BY rowid")->fetchAll();
         $this->assertSame(['add_session_credits', 'search_clients', 'get_schedule'], array_column($rows, 'action'));
         $this->assertSame(['ok', 'ok', 'error'], array_column($rows, 'status'));
         $args = json_decode($rows[0]['args_json'], true);

@@ -5,6 +5,7 @@ namespace StretchEffect\Mcp;
 
 use StretchEffect\Contracts\DomainError;
 use StretchEffect\Contracts\Services;
+use StretchEffect\Services\PaymentReferences;
 
 /** The 11 connector tools: definitions (name, scope, annotations, input schema) and their executors. */
 final class Tools
@@ -75,7 +76,7 @@ final class Tools
                     'client_id' => self::ID,
                     'sessions' => ['type' => 'integer', 'minimum' => 1, 'maximum' => self::MAX_CREDITS_PER_CALL],
                     'reason' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 200, 'description' => 'Why, for example "paid EFT for 5-pack".'],
-                    'payment_reference' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 60, 'description' => 'Optional payment reference. Each reference can be used once.'],
+                    'payment_reference' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 60, 'description' => 'Optional payment reference. Each reference can be used once, ever (case and spacing are ignored).'],
                     'idempotency_key' => self::IDEM,
                 ], ['client_id', 'sessions', 'reason', 'idempotency_key']),
             ],
@@ -100,22 +101,22 @@ final class Tools
             ],
             'cancel_booking' => [
                 'title' => 'Cancel booking', 'scope' => 'bookings:write', 'write' => true, 'destructive' => true,
-                'description' => 'Cancel a booking, optionally refunding the session credit. Needs a reason.',
+                'description' => 'Cancel a booking, optionally refunding the session credit. Needs a reason and a unique idempotency_key.',
                 'schema' => $obj([
                     'booking_id' => self::ID,
                     'refund_credit' => ['type' => 'boolean'],
                     'reason' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 200],
                     'idempotency_key' => self::IDEM,
-                ], ['booking_id', 'refund_credit', 'reason']),
+                ], ['booking_id', 'refund_credit', 'reason', 'idempotency_key']),
             ],
             'reschedule_booking' => [
                 'title' => 'Reschedule booking', 'scope' => 'bookings:write', 'write' => true, 'destructive' => false,
-                'description' => 'Move a booking to a new free time. Times are Africa/Johannesburg local.',
+                'description' => 'Move a booking to a new free time. Times are Africa/Johannesburg local. Needs a unique idempotency_key.',
                 'schema' => $obj([
                     'booking_id' => self::ID,
                     'new_start' => $dt('New start time, local, YYYY-MM-DDTHH:MM.'),
                     'idempotency_key' => self::IDEM,
-                ], ['booking_id', 'new_start']),
+                ], ['booking_id', 'new_start', 'idempotency_key']),
             ],
         ];
     }
@@ -145,12 +146,30 @@ final class Tools
         };
     }
 
+    /**
+     * Fields (in each tool's structuredContent) that hold text typed by clients. Listed in the result as "untrusted_fields"
+     * so the model is told, in the data itself, which values must never be treated as instructions.
+     * @return list<string>
+     */
+    public static function untrustedFields(string $tool): array
+    {
+        return match ($tool) {
+            'get_schedule', 'list_bookings', 'create_booking', 'cancel_booking', 'reschedule_booking' => ['untrusted_client_name'],
+            'search_clients' => ['untrusted_name'],
+            'get_client' => ['untrusted_name', 'untrusted_note'],
+            'add_session_credits', 'remove_session_credits' => ['untrusted_client_name'],
+            default => [],
+        };
+    }
+
     private function actor(string $grantId): string
     {
         return 'chatgpt:' . $grantId;
     }
 
     /** Free text from the database or from clients: strip control characters, collapse whitespace, cap length. */
+    public const NAME_MAX = 60;
+
     public static function text(mixed $v, int $max = 120): string
     {
         $t = is_scalar($v) ? (string) $v : '';
@@ -179,7 +198,7 @@ final class Tools
         return [
             'booking_id' => (string) ($b['id'] ?? ''),
             'client_id' => (string) ($b['userId'] ?? $b['user_id'] ?? ''),
-            'client_name' => self::text($b['clientName'] ?? $b['client_name'] ?? '', 80),
+            'untrusted_client_name' => self::text($b['clientName'] ?? $b['client_name'] ?? '', self::NAME_MAX),
             'start' => $start, 'end' => $end,
             'start_local' => $this->local($start), 'end_local' => $this->local($end),
             'status' => (string) ($b['status'] ?? ''),
@@ -261,7 +280,7 @@ final class Tools
         $u = is_array($c['user'] ?? null) ? $c['user'] : $c;
         return [
             'client_id' => (string) ($u['id'] ?? ''),
-            'name' => self::text($u['name'] ?? '', 80),
+            'untrusted_name' => self::text($u['name'] ?? '', self::NAME_MAX),
             'email' => self::text($u['email'] ?? '', 120),
             'balance' => (int) ($c['balance'] ?? 0),
             'upcoming_bookings' => (int) ($c['upcoming'] ?? 0),
@@ -289,13 +308,14 @@ final class Tools
         $out['client_id'] = $a['client_id'];
         $ledger = [];
         foreach (array_slice(is_array($c['ledger'] ?? null) ? $c['ledger'] : [], 0, 10) as $l) {
-            $ledger[] = ['delta' => (int) ($l['delta'] ?? 0), 'reason' => (string) ($l['reason'] ?? ''), 'at' => (string) ($l['createdAt'] ?? $l['created_at'] ?? '')];
+            $ledger[] = ['delta' => (int) ($l['delta'] ?? 0), 'reason' => (string) ($l['reason'] ?? ''),
+                'untrusted_note' => self::text($l['note'] ?? '', 120), 'at' => (string) ($l['createdAt'] ?? $l['created_at'] ?? '')];
         }
         $bookings = [];
         foreach (array_slice(is_array($c['bookings'] ?? null) ? $c['bookings'] : [], 0, 10) as $b) {
             if (is_array($b)) {
                 $o = $this->bookingOut($b);
-                unset($o['client_name'], $o['client_id']);
+                unset($o['untrusted_client_name'], $o['client_id']);
                 $bookings[] = $o;
             }
         }
@@ -327,42 +347,32 @@ final class Tools
         if ($client === null) {
             throw new ToolInputError('Client not found.');
         }
-        $name = self::text(($client['summary']['user']['name'] ?? $client['summary']['name'] ?? ''), 80);
+        $name = self::text(($client['summary']['user']['name'] ?? $client['summary']['name'] ?? ''), self::NAME_MAX);
         $n = $a['sessions'];
-        $ref = $a['payment_reference'] ?? null;
+        $ref = isset($a['payment_reference']) ? PaymentReferences::normalize((string) $a['payment_reference']) : null;
+        $ref = $ref === '' ? null : $ref;
         $reason = self::text($a['reason'], 200);
         if ($reason === '') {
             throw new ToolInputError('A reason is required.');
         }
-        $note = $ref !== null ? $reason . ' [ref ' . self::text($ref, 60) . ']' : $reason;
+        $note = $ref !== null ? $reason . ' [ref ' . $ref . ']' : $reason;
         $db = $this->s->db();
 
-        $db->transaction(function () use ($a, $grantId, $sign, $n, $ref, $note) {
+        $db->transaction(function () use ($db, $a, $grantId, $sign, $n, $ref, $note) {
             if ($sign > 0) {
+                // Single serialisation point for every ChatGPT credit write: lock the owner row first, then read the
+                // daily total. Concurrent adds queue on this lock (MySQL); SQLite's BEGIN IMMEDIATE already serialises.
+                // The SUM read below is the first plain read of the transaction, so it sees the previous holder's commit.
+                $pdo = $db->pdo();
+                $pdo->query("SELECT id FROM users WHERE role = 'owner' ORDER BY id LIMIT 1" . ($db->driver() === 'mysql' ? ' FOR UPDATE' : ''))->fetchColumn();
                 $today = $this->s->credits()->chatgptAddedToday();
                 if ($today + $n > self::DAILY_CREDIT_CAP) {
                     throw new ToolInputError('Daily limit: at most ' . self::DAILY_CREDIT_CAP . ' sessions can be added through ChatGPT per day ('
                         . $today . ' already added today). Use the admin page for larger changes.');
                 }
                 if ($ref !== null) {
-                    $pdo = $this->s->db()->pdo();
-                    $chk = $pdo->prepare('SELECT 1 FROM pack_requests WHERE payment_reference = ?');
-                    $chk->execute([$ref]);
-                    $taken = $chk->fetchColumn() !== false;
-                    if (!$taken) {
-                        $ins = $pdo->prepare('INSERT INTO idempotency_keys (scope_key, result_json, created_at) VALUES (?,?,?)');
-                        try {
-                            $ins->execute(['payref:' . $this->s->crypto()->hash($ref), '{"payref":true}', $this->s->db()->now()->format('Y-m-d H:i:s')]);
-                        } catch (\PDOException $e) {
-                            if ((string) $e->getCode() !== '23000') {
-                                throw $e;
-                            }
-                            $taken = true;
-                        }
-                    }
-                    if ($taken) {
-                        throw new DomainError('conflict', 'That payment reference has already been used.');
-                    }
+                    // Permanent, normalised, shared with the owner's "mark pack paid"; same transaction as the ledger row.
+                    PaymentReferences::claim($pdo, $ref, $a['client_id'], 'chatgpt', $db->now()->format('Y-m-d H:i:s'));
                 }
             } elseif ($this->s->credits()->balance($a['client_id']) < $n) {
                 throw new DomainError('no_credits', 'The client only has ' . $this->s->credits()->balance($a['client_id']) . ' session(s); the balance cannot go below zero.');
@@ -373,7 +383,7 @@ final class Tools
         $bal = $this->s->credits()->balance($a['client_id']);
         $verb = $sign > 0 ? 'Added' : 'Removed';
         return ['summary' => "$verb $n session(s) " . ($sign > 0 ? 'to' : 'from') . " client {$a['client_id']}. New balance: $bal.",
-            'data' => ['client_id' => $a['client_id'], 'client_name' => $name, ($sign > 0 ? 'added' : 'removed') => $n, 'new_balance' => $bal]];
+            'data' => ['client_id' => $a['client_id'], 'untrusted_client_name' => $name, ($sign > 0 ? 'added' : 'removed') => $n, 'new_balance' => $bal]];
     }
 
     private function createBooking(array $a, string $grantId): array
