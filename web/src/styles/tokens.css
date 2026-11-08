@@ -1,0 +1,58 @@
+/* The Stretch Effect design tokens. Components use these; no new raw hex values elsewhere. */
+:root {
+  --ink: #0a0a0b;
+  --panel: #131315;
+  --panel-2: #1b1b1e;
+  --line: #2a2a2f;
+  --line-2: #3a3a40;
+  --red: #c8102e;
+  --red-hi: #e01a36;
+  --red-deep: #7d0a1b;
+  --red-wash: rgba(200, 16, 46, 0.12);
+  --silver: #c9ccd2;
+  --white: #f4f4f2;
+  --muted: #8d8d95;
+  --ok: #3fa66b;
+  --ok-wash: rgba(63, 166, 107, 0.12);
+  --warn: #d9a23a;
+  --warn-wash: rgba(217, 162, 58, 0.12);
+
+  /* Faceted logo shades, light to dark */
+  --facet-1: #f4f4f2;
+  --facet-2: #c9ccd2;
+  --facet-3: #8f9198;
+  --facet-4: #5b5c63;
+
+  --font-display: 'Anton', 'Impact', 'Arial Narrow', sans-serif;
+  --font-brand: 'Cinzel', 'Trajan Pro', Georgia, serif;
+  --font-body: 'Barlow', 'Helvetica Neue', Arial, sans-serif;
+
+  --r-btn: 2px;
+  --r-input: 4px;
+  --r-card: 6px;
+
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+  --s8: 64px;
+  --s9: 96px;
+
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --t-fast: 150ms;
+  --t-med: 250ms;
+
+  --maxw: 1200px;
+  --gutter: 16px;
+
+  color-scheme: dark;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --gutter: 32px;
+  }
+}

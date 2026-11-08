@@ -1,0 +1,72 @@
+.logo {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  color: var(--white);
+}
+.logo-horizontal {
+  gap: 10px;
+}
+.logo-stacked {
+  flex-direction: column;
+  gap: 4px;
+}
+.logo-mark {
+  flex: none;
+}
+
+.wordmark {
+  display: inline-grid;
+  justify-items: start;
+  font-family: var(--font-brand);
+  text-transform: uppercase;
+  line-height: 1;
+  color: var(--white);
+}
+.wm-the {
+  font-size: 0.32em;
+  letter-spacing: 0.3em;
+  font-weight: 500;
+  color: var(--silver);
+  margin-bottom: 0.12em;
+}
+.wm-stretch {
+  font-size: 1em;
+  font-weight: 400;
+  letter-spacing: 0.14em;
+  margin-right: -0.14em;
+}
+.wm-effect {
+  display: flex;
+  align-items: center;
+  gap: 0.5em;
+  width: 100%;
+  font-size: 0.3em;
+  font-weight: 600;
+  letter-spacing: 0.6em;
+  color: var(--red);
+  margin-top: 0.25em;
+}
+.wm-effect i {
+  flex: 1;
+  height: 1px;
+  min-width: 0.8em;
+  background: var(--red);
+}
+.wm-effect i:last-child {
+  margin-left: -0.6em;
+}
+
+.wordmark-sm {
+  font-size: 22px;
+}
+.wordmark-md {
+  font-size: 40px;
+}
+.wordmark-lg {
+  font-size: clamp(44px, 7vw, 72px);
+  justify-items: center;
+}
+.wordmark-lg .wm-the {
+  justify-self: start;
+}

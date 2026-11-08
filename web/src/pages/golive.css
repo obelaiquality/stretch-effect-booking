@@ -1,0 +1,90 @@
+/* What it takes to go live. Tokens only. */
+
+.golive-hero {
+  padding-top: var(--s7);
+  padding-bottom: var(--s6);
+}
+.gl-section {
+  padding: var(--s6) 0;
+  border-top: 1px solid var(--line);
+}
+.gl-title {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  font-weight: 400;
+  font-size: clamp(28px, 4.5vw, 44px);
+  line-height: 1;
+  margin: var(--s2) 0 var(--s5);
+}
+.gl-cols {
+  display: grid;
+  gap: var(--s4);
+  grid-template-columns: minmax(0, 1fr);
+}
+@media (min-width: 800px) {
+  .gl-cols {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.gl-timeline {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0;
+  counter-reset: gl;
+}
+.gl-timeline li {
+  counter-increment: gl;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: var(--s4);
+  padding: var(--s4) 0;
+  border-bottom: 1px solid var(--line);
+}
+.gl-timeline li::before {
+  content: counter(gl);
+  font-family: var(--font-display);
+  font-size: 32px;
+  line-height: 1;
+  color: var(--red);
+}
+.gl-timeline p {
+  margin: 4px 0 0;
+}
+.gl-note {
+  font-size: 13px;
+  color: var(--muted);
+  margin-top: var(--s3);
+}
+.table td.r,
+.table th.r {
+  text-align: right;
+}
+.table tr.total td {
+  font-weight: 600;
+  border-top: 1px solid var(--silver);
+  background: var(--panel-2);
+}
+
+.ticks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s3);
+  font-size: 15px;
+}
+.ticks li {
+  padding-left: 18px;
+  position: relative;
+}
+.ticks li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.6em;
+  width: 8px;
+  height: 2px;
+  background: var(--red);
+}
