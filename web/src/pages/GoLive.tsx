@@ -4,19 +4,19 @@ import './golive.css';
 const CHECKED = 'Prices checked November 2026, confirm on afrihost.com before buying.';
 
 const steps: Array<[string, string]> = [
-  ['Ivan buys hosting and a domain', 'An Afrihost Linux shared hosting plan and a .co.za domain, bought in his own name so he owns everything. We suggest starting with a one-week trial to test the few things Afrihost does not publish.'],
-  ['We upload the app and database', 'The booking site, the PHP backend and the MySQL database go onto his hosting. A free SSL certificate (Let\'s Encrypt, through Afrihost AutoSSL) is switched on. Test bookings and test clients only.'],
-  ['Connect Google Calendar', 'Ivan\'s diary becomes the single source of truth: his busy times block the booking page and each booking is written to his calendar. Set up once, by signing in with Google or by sharing the calendar. We confirm the best route with a short test on his real calendar.'],
-  ['Connect ChatGPT (optional)', 'Add the studio as a custom connector in his own ChatGPT account, sign in with his password and 2FA, and choose what ChatGPT may do. Starts read-only if he prefers.'],
-  ['Test together', 'Ivan books, cancels and loads a pack for himself and a friend, checks the calendar and the audit log, and adjusts prices, packs and hours.'],
+  ['You buy hosting and a domain', 'An Afrihost Linux shared hosting plan and a .co.za domain, bought in your own name so you own everything. We suggest starting with a one-week trial to test the few things Afrihost does not publish.'],
+  ['We upload the app and database', 'The booking site, the PHP backend and the MySQL database go onto your hosting. A free SSL certificate (Let\'s Encrypt, through Afrihost AutoSSL) is switched on. Test bookings and test clients only.'],
+  ['Connect Google Calendar', 'Your diary becomes the single source of truth: your busy times block the booking page and each booking is written to your calendar. You set it up once, by signing in with Google or by sharing the calendar. We confirm the best route with a short test on your real calendar.'],
+  ['Connect ChatGPT (optional)', 'Add the studio as a custom connector in your own ChatGPT account, sign in with your password and 2FA, and choose what ChatGPT may do. It can start read-only if you prefer.'],
+  ['Test together', 'You book, cancel and load a pack for yourself and a friend, check the calendar and the audit log, and adjust prices, packs and hours.'],
   ['Launch', 'Real clients are invited, and the link goes on Instagram and WhatsApp. Demo data is cleared first.'],
 ];
 
 const needs: Array<[string, string]> = [
-  ['Afrihost access', 'Either a login to his Afrihost account, or a delegated user that he creates for us, so we can upload and set up.'],
-  ['A Google sign-in, once', 'He signs in with Google one time to link his calendar. Clients never sign in with Google.'],
+  ['Afrihost access', 'Either a login to your Afrihost account, or a delegated user that you create for us, so we can upload and set up.'],
+  ['A Google sign-in, once', 'You sign in with Google one time to link your calendar. Clients never sign in with Google.'],
   ['Prices, packages and policies', 'Final prices for single sessions and packs, the first-session offer, working hours, buffer between clients and the cancellation window.'],
-  ['Logo files', 'The best quality versions he has of the wordmark and the figure, so the site matches his brand.'],
+  ['Logo files', 'The best quality versions you have of the wordmark and the figure, so the site matches your brand.'],
 ];
 
 const rivals: Array<[string, string, string, string]> = [
@@ -34,18 +34,14 @@ export default function GoLive() {
   return (
     <div className="wrap">
       <header className="golive-hero">
-        <div className="eyebrow red">For Ivan</div>
-        <h1 className="display" style={{ fontSize: 'clamp(40px, 8vw, 84px)', marginTop: 8 }}>
-          What it takes to <span className="red">go live</span>
-        </h1>
-        <p className="silver" style={{ maxWidth: '60ch', marginTop: 16 }}>
+        <h1 className="page-title">What it takes to go live</h1>
+        <p className="silver measure" style={{ marginTop: 16 }}>
           This demo runs in your browser with made-up clients. The real thing runs on your own hosting, with your own domain, your own Google Calendar and, if you want, your own ChatGPT. This is what you would buy, what is free, and what happens next.
         </p>
       </header>
 
       <section className="gl-section" aria-labelledby="gl-buy">
-        <div className="eyebrow">Costs</div>
-        <h2 className="gl-title" id="gl-buy">What you buy</h2>
+        <h2 className="h2 gl-title" id="gl-buy">What you buy</h2>
         <div className="card" style={{ padding: 0 }}>
           <div className="table-scroll">
             <table className="table">
@@ -60,7 +56,7 @@ export default function GoLive() {
                 <tr>
                   <td>
                     <strong>Afrihost Linux shared hosting, Platinum</strong>
-                    <div className="muted small">R109 a month. 4 GB disk, 200 email accounts, 5 MySQL databases. Month to month, no setup fee.</div>
+                    <div className="muted small gl-cell">R109 a month. 4 GB disk, 200 email accounts, 5 MySQL databases. Month to month, no setup fee.</div>
                   </td>
                   <td className="r num">R1,308</td>
                   <td className="r num">R1,308</td>
@@ -68,7 +64,7 @@ export default function GoLive() {
                 <tr>
                   <td>
                     <strong>A .co.za domain</strong>
-                    <div className="muted small">Registration (R197) is free for the first year with any shared hosting plan. Renewal R109 a year.</div>
+                    <div className="muted small gl-cell">Registration (R197) is free for the first year with any shared hosting plan. Renewal R109 a year.</div>
                   </td>
                   <td className="r num">R0</td>
                   <td className="r num">R109</td>
@@ -76,7 +72,7 @@ export default function GoLive() {
                 <tr>
                   <td>
                     <strong>SSL certificate</strong>
-                    <div className="muted small">Free AutoSSL (Let's Encrypt), installed by us. Renews every three months.</div>
+                    <div className="muted small gl-cell">Free AutoSSL (Let's Encrypt), installed by us. Renews every three months.</div>
                   </td>
                   <td className="r num">R0</td>
                   <td className="r num">R0</td>
@@ -90,14 +86,13 @@ export default function GoLive() {
             </table>
           </div>
         </div>
-        <p className="gl-note">
+        <p className="gl-note measure">
           {CHECKED} Afrihost does not say whether these prices include VAT; if they are ex-VAT, add 15%. If you want more databases, Bronze Pro is R135 a month. If the trial week shows Afrihost shared hosting cannot do something we need, the fallback is a self-managed Afrihost cloud server from R460 a month (about R5,520 a year).
         </p>
       </section>
 
       <section className="gl-section" aria-labelledby="gl-free">
-        <div className="eyebrow">Free and optional</div>
-        <h2 className="gl-title" id="gl-free">What is free, and what you may add</h2>
+        <h2 className="h2 gl-title" id="gl-free">What is free, and what you may add</h2>
         <div className="gl-cols">
           <div className="card">
             <h3 className="h3">Free</h3>
@@ -124,14 +119,13 @@ export default function GoLive() {
       </section>
 
       <section className="gl-section" aria-labelledby="gl-steps">
-        <div className="eyebrow">Timeline</div>
-        <h2 className="gl-title" id="gl-steps">Step by step</h2>
+        <h2 className="h2 gl-title" id="gl-steps">Step by step</h2>
         <ol className="gl-timeline">
           {steps.map(([t, d]) => (
             <li key={t}>
               <div>
                 <strong className="h3" style={{ display: 'block' }}>{t}</strong>
-                <p className="silver">{d}</p>
+                <p className="silver measure">{d}</p>
               </div>
             </li>
           ))}
@@ -139,21 +133,19 @@ export default function GoLive() {
       </section>
 
       <section className="gl-section" aria-labelledby="gl-need">
-        <div className="eyebrow">From you</div>
-        <h2 className="gl-title" id="gl-need">What we need from Ivan</h2>
+        <h2 className="h2 gl-title" id="gl-need">What we need from you</h2>
         <div className="gl-cols">
           {needs.map(([t, d]) => (
             <div key={t} className="card card-tight">
               <h3 className="h3">{t}</h3>
-              <p className="silver small" style={{ margin: '8px 0 0' }}>{d}</p>
+              <p className="silver small measure" style={{ margin: '8px 0 0' }}>{d}</p>
             </div>
           ))}
         </div>
       </section>
 
       <section className="gl-section" aria-labelledby="gl-vs">
-        <div className="eyebrow">Compare</div>
-        <h2 className="gl-title" id="gl-vs">Versus off-the-shelf booking tools</h2>
+        <h2 className="h2 gl-title" id="gl-vs">Versus off-the-shelf booking tools</h2>
         <div className="card" style={{ padding: 0 }}>
           <div className="table-scroll">
             <table className="table">
@@ -184,13 +176,13 @@ export default function GoLive() {
             </table>
           </div>
         </div>
-        <p className="gl-note">
+        <p className="gl-note measure">
           Competitor prices are monthly figures from third-party listings, mostly in US dollars, converted at roughly R18 to the dollar. They are not confirmed on the vendors' own pages, so check before you rely on them. VAT and card fees come on top. Whether Yoco, PayFast or Ozow work with the international tools is not confirmed. Our own figure is the Platinum plan plus the domain renewal, R1,417 a year divided by 12, with the VAT question above still open.
         </p>
       </section>
 
       <section className="gl-section" style={{ paddingBottom: 'var(--s9)' }}>
-        <div className="row">
+        <div className="row gl-actions">
           <Link className="btn btn-red" to="/login">Try the owner view</Link>
           <Link className="btn btn-ghost" to="/">Back to the demo</Link>
         </div>

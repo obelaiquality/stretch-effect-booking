@@ -57,6 +57,21 @@ export default function Shell({ children }: { children: ReactNode }) {
     if (!loc.hash) window.scrollTo(0, 0);
   }, [loc.pathname, loc.hash]);
 
+  // Mobile menu: Escape closes it and the page behind does not scroll.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open]);
+
   const items = user?.role === 'owner' ? OWNER : user ? CLIENT : GUEST;
 
   const onSignOut = async () => {
@@ -109,9 +124,9 @@ export default function Shell({ children }: { children: ReactNode }) {
           <Link to={user?.role === 'owner' ? '/admin' : user ? '/app' : '/'} className="header-logo" aria-label="The Stretch Effect home">
             <Logo />
           </Link>
-          {user?.role === 'owner' && <span className="badge badge-red owner-badge">Owner</span>}
+          {user?.role === 'owner' && <span className="badge owner-badge">Owner</span>}
 
-          <nav className={`site-nav${open ? ' open' : ''}`} aria-label="Main">
+          <nav id="main-nav" className={`site-nav${open ? ' open' : ''}`} aria-label="Main">
             {items.map(renderItem)}
             <div className="nav-actions">
               {user ? (
@@ -126,7 +141,7 @@ export default function Shell({ children }: { children: ReactNode }) {
                   <Link to="/login" className="btn btn-quiet btn-sm">
                     Sign in
                   </Link>
-                  <Link to="/signup" className="btn btn-red btn-sm">
+                  <Link to="/signup" className="btn btn-ghost btn-sm">
                     Book a session
                   </Link>
                 </>
@@ -147,6 +162,7 @@ export default function Shell({ children }: { children: ReactNode }) {
           </button>
         </div>
       </header>
+      {open && <button className="nav-scrim" aria-label="Close menu" tabIndex={-1} onClick={() => setOpen(false)} />}
 
       <main className="site-main">
         <ToastProvider>{children}</ToastProvider>
@@ -157,7 +173,7 @@ export default function Shell({ children }: { children: ReactNode }) {
           <div className="footer-brand">
             <Logo />
             <p className="footer-tag">
-              Get stretched. Move better. <span className="red">Live better.</span>
+              Get stretched. Move better. <span className="footer-tag-accent">Live&nbsp;better.</span>
             </p>
           </div>
           <div className="footer-cols">

@@ -27,7 +27,7 @@
 @media (max-width: 600px) {
   .demo-bar {
     gap: var(--s2);
-    font-size: 12px;
+    font-size: 13px;
   }
   .demo-by {
     display: none;
@@ -99,6 +99,9 @@
   height: 2px;
   background: var(--red);
 }
+.nav-scrim {
+  display: none;
+}
 .nav-actions {
   display: flex;
   align-items: center;
@@ -159,6 +162,17 @@
   .site-nav.open {
     display: flex;
     animation: rise var(--t-med) var(--ease) both;
+    box-shadow: var(--shadow-float);
+  }
+  .nav-scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    border: 0;
+    padding: 0;
+    background: rgba(0, 0, 0, 0.6);
+    cursor: default;
   }
   .nav-link {
     min-height: 52px;
@@ -199,15 +213,22 @@
 .footer-tag {
   margin: var(--s3) 0 0;
   font-family: var(--font-brand);
-  font-size: 13px;
-  letter-spacing: 0.16em;
+  font-size: 16px;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--silver);
+  text-wrap: balance;
+}
+.footer-tag-accent {
+  color: var(--white);
 }
 .footer-cols {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: var(--s5);
+}
+.footer-cols .eyebrow {
+  color: var(--muted);
 }
 .footer-cols p {
   margin: var(--s2) 0 0;

@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../data/api';
 import './admin.css';
-import { AdminFrame, AdminHead, Empty, useLoad } from './ui';
-import { fmtDate, fmtWhen } from './format';
+import { formatDay, formatDayTime } from '../../lib/format';
+import { AdminFrame, AdminHead, Balance, CardSkel, Empty, ErrorState, useLoad } from './ui';
 
 export default function AdminClients() {
   const [q, setQ] = useState('');
@@ -12,18 +12,28 @@ export default function AdminClients() {
     const t = window.setTimeout(() => setDebounced(q.trim()), 200);
     return () => window.clearTimeout(t);
   }, [q]);
-  const { data, error } = useLoad(() => api.adminClients(debounced || undefined), [debounced]);
+  const { data, error, reload } = useLoad(() => api.adminClients(debounced || undefined), [debounced]);
 
   return (
     <AdminFrame>
-      <AdminHead eyebrow="Owner" title={<>Clients<span className="red">.</span></>} />
+      <AdminHead title="Clients" />
       <div className="field" style={{ maxWidth: 480, marginBottom: 'var(--s5)' }}>
         <label htmlFor="cq">Search by name or email</label>
         <input id="cq" className="input" type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Start typing" autoComplete="off" />
       </div>
-      {error && <p className="error-text">{error}</p>}
-      {!data && !error && <p className="muted" aria-busy="true">Loading...</p>}
-      {data && data.length === 0 && <Empty>No clients match "{debounced}".</Empty>}
+      {error && <ErrorState message={error} onRetry={reload} />}
+      {!data && !error && (
+        <div className="card">
+          <CardSkel lines={6} />
+        </div>
+      )}
+      {data && data.length === 0 && (
+        debounced ? (
+          <Empty actionLabel="Clear the search" onAction={() => setQ('')}>{`No clients match "${debounced}".`}</Empty>
+        ) : (
+          <Empty to="/admin" actionLabel="Back to today">No clients yet. They appear here when they sign up.</Empty>
+        )
+      )}
       {data && data.length > 0 && (
         <>
           <div className="card only-wide" style={{ padding: 0 }}>
@@ -49,11 +59,11 @@ export default function AdminClients() {
                       </td>
                       <td className="muted">{c.user.email}</td>
                       <td className="num">
-                        <span className={'badge ' + (c.balance === 0 ? 'badge-red' : c.balance === 1 ? 'badge-warn' : '')}>{c.balance}</span>
+                        <Balance n={c.balance} />
                       </td>
                       <td className="num">{c.upcoming}</td>
-                      <td className="num">{c.lastVisit ? fmtDate(c.lastVisit) : 'None yet'}</td>
-                      <td className="num">{c.pendingPacks > 0 ? <span className="badge badge-warn">{c.pendingPacks}</span> : '0'}</td>
+                      <td className="num">{c.lastVisit ? formatDay(c.lastVisit) : 'None yet'}</td>
+                      <td className="num">{c.pendingPacks > 0 ? <span className="bal bal-1">{c.pendingPacks} waiting</span> : '0'}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -67,13 +77,11 @@ export default function AdminClients() {
                   <div className="row">
                     <strong>{c.user.name}</strong>
                     <span className="spacer" />
-                    <span className={'badge ' + (c.balance === 0 ? 'badge-red' : c.balance === 1 ? 'badge-warn' : '')}>
-                      {c.balance} left
-                    </span>
+                    <Balance n={c.balance} />
                   </div>
                   <div className="muted small">{c.user.email}</div>
                   <div className="small num silver">
-                    {c.upcoming} upcoming · {c.lastVisit ? `last ${fmtWhen(c.lastVisit)}` : 'no visit yet'}
+                    {c.upcoming} upcoming · {c.lastVisit ? `last ${formatDayTime(c.lastVisit)}` : 'no visit yet'}
                     {c.pendingPacks > 0 ? ` · ${c.pendingPacks} pending` : ''}
                   </div>
                 </Link>

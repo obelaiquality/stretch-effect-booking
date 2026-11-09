@@ -1,19 +1,26 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../data/api';
 import { demoTotpCode, demoTotpSecondsLeft } from '../../data/demoApi';
 import { useSession } from '../../data/session';
 import { ApiError, type User } from '../../domain/types';
 import Icon from '../../components/Icon';
 import PageHeader from '../../components/PageHeader';
+import PasswordField from '../../components/PasswordField';
+import { Skel } from '../../components/Skeleton';
 import '../client/client.css';
+
+const homeFor = (u: User, next: string | null) => {
+  const safe = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
+  return safe ?? (u.role === 'owner' ? '/admin' : '/app');
+};
 
 const spaced = (c: string) => `${c.slice(0, 3)} ${c.slice(3)}`;
 
 export default function Login() {
   const [params] = useSearchParams();
   const nav = useNavigate();
-  const { setUser } = useSession();
+  const { user, loading, setUser } = useSession();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [code, setCode] = useState('');
@@ -31,9 +38,7 @@ export default function Login() {
 
   const done = (u: User) => {
     setUser(u);
-    const next = params.get('next');
-    const safe = next && next.startsWith('/') && !next.startsWith('//') ? next : null;
-    nav(safe ?? (u.role === 'owner' ? '/admin' : '/app'), { replace: true });
+    nav(homeFor(u, params.get('next')), { replace: true });
   };
 
   const submit = async (e: FormEvent) => {
@@ -61,6 +66,18 @@ export default function Login() {
     setError('');
   };
 
+  // Already signed in: go to your home instead of showing the form.
+  if (loading) {
+    return (
+      <div className="wrap" aria-busy="true" aria-label="Loading">
+        <div className="tse-authcard" style={{ display: 'grid', gap: 16 }}>
+          <Skel w={110} h={13} /><Skel w="70%" h={48} /><Skel h={64} /><Skel h={64} /><Skel h={44} />
+        </div>
+      </div>
+    );
+  }
+  if (user && step === 'password') return <Navigate to={homeFor(user, params.get('next'))} replace />;
+
   void tick;
   const live = demoTotpCode();
 
@@ -75,17 +92,14 @@ export default function Login() {
                 <label htmlFor="email">Email</label>
                 <input id="email" className="input" type="email" autoComplete="username" value={email} onChange={(e) => setEmail(e.target.value)} required />
               </div>
-              <div className="field">
-                <label htmlFor="password">Password</label>
-                <input id="password" className="input" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-              </div>
+              <PasswordField id="password" label="Password" autoComplete="current-password" value={password} onChange={setPassword} />
             </>
           ) : (
             <div className="field">
               <label htmlFor="code">6-digit code from your authenticator app</label>
               <input
                 id="code" className="input" inputMode="numeric" autoComplete="one-time-code" maxLength={7} placeholder="123 456"
-                value={code} onChange={(e) => setCode(e.target.value.replace(/[^\d ]/g, ''))} autoFocus required
+                value={code} onChange={(e) => setCode(e.target.value.replace(/[^\d ]/g, ''))} autoFocus required aria-invalid={error ? true : undefined}
               />
               <span className="hint"><Icon name="lock" size={14} style={{ display: 'inline', verticalAlign: '-2px' }} /> The owner account needs a second step.</span>
             </div>
@@ -109,7 +123,7 @@ export default function Login() {
 
         {demo && (
           <aside className="tse-demo-panel" aria-label="Demo accounts">
-            <div className="eyebrow red">Demo accounts</div>
+            <div className="eyebrow">Demo accounts</div>
             {step === 'password' ? (
               <>
                 <p className="small muted" style={{ margin: 0 }}>Nothing here is real. Pick a role to look around.</p>

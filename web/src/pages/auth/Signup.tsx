@@ -4,6 +4,7 @@ import { api } from '../../data/api';
 import { useSession } from '../../data/session';
 import { ApiError } from '../../domain/types';
 import PageHeader from '../../components/PageHeader';
+import PasswordField from '../../components/PasswordField';
 import '../client/client.css';
 
 export default function Signup() {
@@ -37,7 +38,7 @@ export default function Signup() {
   return (
     <div className="wrap">
       <div className="tse-authcard">
-        <PageHeader eyebrow="Get stretched" title="Create account">
+        <PageHeader eyebrow="New client" title="Create account">
           Your first session is 50% off. Pay at the studio.
         </PageHeader>
         <form className="stack" onSubmit={submit} noValidate>
@@ -53,13 +54,9 @@ export default function Signup() {
             <label htmlFor="phone">Phone (optional)</label>
             <input id="phone" className="input" type="tel" autoComplete="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
           </div>
-          <div className="field">
-            <label htmlFor="password">Password</label>
-            <input id="password" className="input" type="password" autoComplete="new-password" minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} aria-describedby="pw-rule" required />
-            <span id="pw-rule" className="hint">At least 10 characters.</span>
-          </div>
-          <label className="row" style={{ alignItems: 'flex-start', flexWrap: 'nowrap', cursor: 'pointer', minHeight: 44 }}>
-            <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} style={{ width: 22, height: 22, marginTop: 2, accentColor: 'var(--red)', flex: 'none' }} />
+          <PasswordField id="password" label="Password" autoComplete="new-password" minLength={10} value={password} onChange={setPassword} describedBy="pw-rule" hint="At least 10 characters." />
+          <label className="row tse-checkrow">
+            <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
             <span className="small silver">I agree that The Stretch Effect stores my details to manage my bookings</span>
           </label>
           {error && <p className="error-text" role="alert">{error}</p>}

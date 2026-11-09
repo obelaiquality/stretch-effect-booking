@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { Booking } from '../domain/types';
-import { formatLocalDate, formatLocalTime } from '../domain/slots';
+import { formatDay, formatTimeRange } from '../lib/format';
 import Icon from './Icon';
 import './components.css';
 
@@ -22,11 +22,11 @@ export default function BookingCard({ booking, actions, showClient, highlight }:
   const st = STATUS[booking.status];
   const dim = booking.status === 'cancelled';
   return (
-    <article className={`card card-tight tse-bcard${highlight ? ' card-red-top' : ''}${dim ? ' is-dim' : ''}`}>
+    <article className={`card card-tight tse-bcard${highlight ? ' is-next' : ''}${dim ? ' is-dim' : ''}`}>
       <div className="tse-bcard-date">
-        <div className="display tse-bcard-day">{formatLocalDate(booking.start)}</div>
+        <div className="display tse-bcard-day">{formatDay(booking.start)}</div>
         <div className="tse-bcard-time num">
-          <Icon name="clock" size={16} /> {formatLocalTime(booking.start)} to {formatLocalTime(booking.end)}
+          <Icon name="clock" size={16} /> {formatTimeRange(booking.start, booking.end)}
         </div>
         {showClient && <div className="small silver">{booking.clientName}</div>}
       </div>
