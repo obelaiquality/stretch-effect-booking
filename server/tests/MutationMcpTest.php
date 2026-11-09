@@ -479,7 +479,7 @@ final class MutationMcpTest extends FakeTestCase
         $bad('add_session_credits', ['client_id' => '', 'sessions' => 1, 'reason' => 'r', 'idempotency_key' => $k()], '"client_id" must be at least 1 characters');
         $bad('add_session_credits', ['client_id' => str_repeat('a', 65), 'sessions' => 1, 'reason' => 'r', 'idempotency_key' => $k()], '"client_id" must be at most 64 characters');
         $bad('add_session_credits', ['client_id' => 'a b', 'sessions' => 1, 'reason' => 'r', 'idempotency_key' => $k()], '"client_id" has the wrong format');
-        $bad('add_session_credits', ['client_id' => $cid, 'sessions' => 1, 'reason' => 'r', 'idempotency_key' => $k(), 'payment_reference' => ''], '"payment_reference" must be at least 1 characters');
+        $bad('add_session_credits', ['client_id' => $cid, 'sessions' => 1, 'reason' => 'r', 'idempotency_key' => $k(), 'payment_reference' => 'ab'], '"payment_reference" must be at least 3 characters');
         $bad('add_session_credits', ['client_id' => $cid, 'sessions' => 1, 'reason' => 'r', 'idempotency_key' => $k(), 'payment_reference' => str_repeat('p', 61)], '"payment_reference" must be at most 60 characters');
         $this->assertSame('Client not found.', $this->tool($t, 'add_session_credits', ['client_id' => str_repeat('a', 64), 'sessions' => 1, 'reason' => 'r', 'idempotency_key' => $k()])['result']['content'][0]['text']);
         $bad('search_clients', ['query' => 'a'], '"query" must be at least 2 characters');
@@ -591,8 +591,8 @@ final class MutationMcpTest extends FakeTestCase
         $cid = $this->svc->clientId;
         $r = $this->tool($t, 'search_clients', ['query' => 'thandi'])['result'];
         $this->assertSame('1 client(s) match.', $r['content'][0]['text']);
-        $this->assertSame([['client_id' => $cid, 'untrusted_name' => 'Thandi Test', 'email' => 'thandi@example.com', 'balance' => 5, 'upcoming_bookings' => 0]], $r['structuredContent']['clients']);
-        $this->assertSame(['untrusted_name'], $r['structuredContent']['untrusted_fields']);
+        $this->assertSame([['client_id' => $cid, 'untrusted_name' => 'Thandi Test', 'untrusted_email' => 'thandi@example.com', 'balance' => 5, 'upcoming_bookings' => 0]], $r['structuredContent']['clients']);
+        $this->assertSame(['untrusted_name', 'untrusted_email'], $r['structuredContent']['untrusted_fields']);
         for ($i = 0; $i < 25; $i++) {
             $this->svc->addUser('client', "Bulk Person $i", "bulk$i@example.com", 'pw-pw-pw-pw');
         }
@@ -609,12 +609,12 @@ final class MutationMcpTest extends FakeTestCase
         $this->assertSame("Client $cid: 17 session(s) left, 0 upcoming booking(s).", $g['content'][0]['text']);
         $this->assertSame($cid, $sc['client_id']);
         $this->assertSame('Thandi Test', $sc['untrusted_name']);
-        $this->assertSame('thandi@example.com', $sc['email']);
+        $this->assertSame('thandi@example.com', $sc['untrusted_email']);
         $this->assertSame(17, $sc['balance']);
         $this->assertSame(0, $sc['pending_pack_requests']);
         $this->assertCount(10, $sc['recent_credit_changes'], 'only the 10 newest ledger rows');
         $this->assertSame(['delta', 'reason', 'untrusted_note', 'at'], array_keys($sc['recent_credit_changes'][0]));
-        $this->assertSame(['untrusted_name', 'untrusted_note'], $sc['untrusted_fields']);
+        $this->assertSame(['untrusted_name', 'untrusted_email', 'untrusted_note'], $sc['untrusted_fields']);
         $this->assertSame([], $sc['recent_bookings']);
         $this->assertSame('Client not found.', $this->tool($t, 'get_client', ['client_id' => 'nope'])['result']['content'][0]['text']);
         $this->assertTrue($this->tool($t, 'get_client', ['client_id' => 'nope'])['result']['isError']);
@@ -655,8 +655,8 @@ final class MutationMcpTest extends FakeTestCase
         $this->assertSame(['untrusted_client_name'], Tools::untrustedFields('reschedule_booking'));
         $this->assertSame(['untrusted_client_name'], Tools::untrustedFields('remove_session_credits'));
         $this->assertSame(['untrusted_client_name'], Tools::untrustedFields('add_session_credits'));
-        $this->assertSame(['untrusted_name'], Tools::untrustedFields('search_clients'));
-        $this->assertSame(['untrusted_name', 'untrusted_note'], Tools::untrustedFields('get_client'));
+        $this->assertSame(['untrusted_name', 'untrusted_email'], Tools::untrustedFields('search_clients'));
+        $this->assertSame(['untrusted_name', 'untrusted_email', 'untrusted_note'], Tools::untrustedFields('get_client'));
         $this->assertSame([], Tools::untrustedFields('get_business_summary'));
         $this->assertSame([], Tools::untrustedFields('find_free_slots'));
         $this->expectException(ToolInputError::class);

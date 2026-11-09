@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError, type Booking, type LedgerEntry, type LedgerReason } from './types';
-import { DAILY_CREDIT_CAP, TOOLS, runTool, validateArgs, type ToolContext } from './mcpTools';
+import { DAILY_CREDIT_CAP, TOOLS, canonicalPaymentReference, runTool, validateArgs, type ToolContext } from './mcpTools';
 
 const NOW = Date.parse('2026-11-09T08:00:00.000Z'); // Mon 09 Nov 2026, 10:00 local
 
@@ -120,6 +120,28 @@ describe('runTool reads', () => {
       const r = await runTool(name, args, ctx);
       expect(JSON.stringify(r)).not.toMatch(/SECRET_HASH|passwordHash|totp/i);
     }
+  });
+  it('payment references: invisible and look-alike characters cannot make a second reference', async () => {
+    expect(canonicalPaymentReference('  tse   4471 ')).toBe('TSE 4471');
+    expect(canonicalPaymentReference('PAY\u200B-\uFEFF100\u00AD')).toBe('PAY-100');
+    expect(canonicalPaymentReference('ＰＡＹ-１００')).toBe('PAY-100');
+    expect(canonicalPaymentReference('   ')).toBeUndefined();
+    for (const bad of ['ab', 'a'.repeat(61), 'PAY\u201100', '\u0420AY-100', 'PAY\t100', 'PAY;100', 'é-ecole']) expect(canonicalPaymentReference(bad), bad).toBeNull();
+    expect(canonicalPaymentReference('a'.repeat(60))).toBe('A'.repeat(60));
+    const { ctx, st } = makeCtx();
+    const base = { client_id: 'u_thandi', sessions: 1, reason: 'EFT received' };
+    const bad = await runTool('add_session_credits', { ...base, payment_reference: '\u0420AY-100', idempotency_key: key('p') }, ctx);
+    expect(bad).toMatchObject({ ok: false, error: 'invalid_params' });
+    expect(st.ledger.filter((l) => l.reason === 'chatgpt_adjust')).toHaveLength(0);
+    expect(validateArgs(TOOLS.find((t) => t.name === 'add_session_credits')!.inputSchema, { ...base, idempotency_key: key('q'), payment_reference: 'ab' })).toEqual(['"payment_reference" is too short (min 3)']);
+    const good = await runTool('add_session_credits', { ...base, payment_reference: 'PAY\u200B-100', idempotency_key: key('r') }, ctx);
+    expect(good.ok).toBe(true);
+  });
+  it('get_client labels the e-mail address as untrusted', async () => {
+    const { ctx } = makeCtx();
+    const r = (await runTool('get_client', { client_id: 'u_thandi' }, ctx)).result as Record<string, unknown>;
+    expect(r.untrusted_email).toBe('thandi@example.com');
+    expect(r).not.toHaveProperty('email');
   });
   it('search_clients needs 2 characters and returns ids', async () => {
     const { ctx } = makeCtx();

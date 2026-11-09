@@ -26,7 +26,7 @@ final class CoreTestKit
             'db' => ['dsn' => 'sqlite::memory:'],
             'google' => ['client_id' => 'test-client', 'client_secret' => 'test-secret', 'calendar_id' => 'ivan@example.com'],
             'mail' => ['from' => 'Test <test@example.com>'],
-            'cron' => ['token' => 'cron-secret-token'],
+            'cron' => ['token' => 'cron-secret-token-0123456789-abcdefghij'],
         ], $override);
     }
 

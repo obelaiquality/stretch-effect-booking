@@ -11,7 +11,7 @@ import {
 import { balanceOf, qualifiesForRefund } from '../domain/credits';
 import { addDays, computeSlots, isSlotFree, localDayKey, localDayKeyMs } from '../domain/slots';
 import { buildSeed, type DemoState, type StoredUser } from './seed';
-import { runTool } from '../domain/mcpTools';
+import { canonicalPaymentReference, runTool } from '../domain/mcpTools';
 
 let pendingOwner: string | null = null;
 const STORE_KEY = 'tse-demo-v1';
@@ -447,7 +447,9 @@ export const demoApi: Api = {
   },
   async adminMarkPackPaid(packRequestId, paymentReference) {
     const o = requireOwner();
-    return markPackPaid(packRequestId, paymentReference?.trim() || undefined, o.id);
+    const ref = paymentReference === undefined ? undefined : canonicalPaymentReference(paymentReference);
+    if (ref === null) throw new ApiError('validation', 'The payment reference must be 3 to 60 characters: letters, digits, spaces and . _ / # - only.');
+    return markPackPaid(packRequestId, ref, o.id);
   },
   async adminBookFor(userId, slotStart) {
     const o = requireOwner();

@@ -56,6 +56,8 @@ interface CreditService
     public function adjust(string $userId, int $delta, string $reason, ?string $note, string $actor, ?string $bookingId = null): array;
     /** Credits added via ChatGPT for the current SA calendar day (for the daily cap). */
     public function chatgptAddedToday(): int;
+
+    public function chatgptRemovedToday(): int;
     /** Mark a pending pack request paid and add its credits. */
     public function markPackPaid(string $packRequestId, ?string $paymentReference, string $actor): array;
 }

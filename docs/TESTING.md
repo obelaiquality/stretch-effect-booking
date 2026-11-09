@@ -16,8 +16,8 @@ The web side has its own write-up: [web/TESTING.md](../web/TESTING.md) (fast-che
 ```bash
 cd server
 composer install
-vendor/bin/phpunit --testsuite=server        # unit + integration, about 6 s, 296 tests
-vendor/bin/phpunit                           # server + fuzz suites together (310 tests)
+vendor/bin/phpunit --testsuite=server        # unit + integration, about 6 s, 320 tests
+vendor/bin/phpunit                           # server + fuzz suites together (334 tests)
 ```
 
 ### Fuzzing
@@ -78,6 +78,7 @@ Notes:
 | Area | Where | What is pinned (exact values and boundaries) |
 | --- | --- | --- |
 | OAuth server | `OAuthTest`, `MutationOAuthTest` | metadata documents; DCR (body 16 384 bytes, 10 registrations an hour, 500 clients, redirect allow-list: exact list, prefix rules, `.`/`..`, 128 chars, userinfo, fragment, wildcard, control characters, 500 chars, loopback http only when not live); CIMD (host list, port 443, cache 3600 s); authorize (state 500, PKCE challenge 43 chars, S256 only, resource, scopes, 60 views an hour); consent (CSRF, request lifetime 600 s, 5 attempts per record, 5 attempts per 15 minutes per IP, owner role only, TOTP reuse); pairing window 15 minutes, closes on the first grant of a new client; code 60 s, single use, replay revokes the grant; PKCE verifier 43-128 chars and S256 not plain; access 3600 s, refresh 30 days, grant ceiling 90 days, each exact at the boundary second; refresh rotation and reuse revocation; revocation (own client only, always `{}`); 30 token calls a minute |
+| Second review | `SecurityReview2Test` (24 tests) | payment reference look-alikes (zero-width, full-width, Cyrillic, non-breaking hyphen) on the ChatGPT and owner paths; DCR cap pruning (24 h unused, grants kept) and opportunistic prune; lock row seeded by migration 003 and MySQL deadlock retry (3 attempts); no session file for anonymous reads, 2 h anonymous session sweep, `/api/csrf` limit; ASCII-only login e-mail; `untrusted_email`; audit retention (180 / 365 days) and the anonymous failure cap; cron token strength and rate limit; daily cap on `remove_session_credits`; transactional `setStatus`; signup timing |
 | MCP | `McpTest`, `MutationMcpTest` | transport (origin, bearer format, body 65 536 bytes, JSON depth 32, protocol versions, JSON-RPC envelope errors, notifications); 60 calls a minute and 20 writes an hour per grant (bucket name and window checked); scope per tool (11 tools); schema bounds (1..20 sessions, key 8..64, query 2..60, 92-day and 14-day ranges); daily cap 40 (limit-th session allowed, next refused); remove cannot go below zero; payment reference once only (case and spacing ignored); idempotency (replay, mismatch, pending, stale after 120 s, released on failure); exact tool outputs and a golden file of `tools/list` (`tests/fixtures/mcp-tools-list.json`; regenerate with `UPDATE_GOLDEN=1` after a deliberate contract change); audit rows and the redactor |
 | Credits, payments | `MutationServicesTest` | ledger validation, balance never below zero, note and actor limits, the daily total follows local midnight (22:00 UTC) to the second, pack requests (5 pending), `markPackPaid`, reference normalisation and the shared once-only table |
 | Bookings | `CoreBookingTest`, `MutationServicesTest`, `MutationServicesExtraTest` | slot grid and buffer (including a 5-minute step and 0/15/30-minute buffers), 12 h notice and 28-day window exact to the second, double booking, no credits, refund rule at exactly 24 h (24 h 0 min 1 s refunds, 24 h does not), owner override, reschedule into the booking's own slot, Google events (own event ignored, patch, delete, failures roll back), mail, summary week and month boundaries and free hours |

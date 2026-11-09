@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace StretchEffect\OAuth;
 
 use StretchEffect\Contracts\Services;
+use StretchEffect\Support\Time;
 
 /** OAuth client registration (RFC 7591 DCR) and Client ID Metadata Documents (CIMD). Public clients only. */
 final class ClientRegistry
@@ -12,6 +13,8 @@ final class ClientRegistry
     public const MAX_NAME = 100;
     private const CIMD_CACHE_SECONDS = 3600;
     private const MAX_CLIENTS = 500;
+    /** A DCR client that never got a grant is dropped after this many seconds (strangers cannot fill the cap for good). */
+    public const UNUSED_TTL_SECONDS = 86400;
 
     public function __construct(private Services $s, private CimdFetcher $fetcher) {}
 
@@ -127,7 +130,16 @@ final class ClientRegistry
         $name = self::sanitizeName($meta['client_name'] ?? '');
 
         $pdo = $this->s->db()->pdo();
-        $count = (int) $pdo->query("SELECT COUNT(*) FROM oauth_clients WHERE registration = 'dcr'")->fetchColumn();
+        $cutoff = Time::toDb($this->s->db()->now()->modify('-' . self::UNUSED_TTL_SECONDS . ' seconds'));
+        // Only clients that are younger than 24 h or have a grant count toward the cap; stale unused ones are pruned on the way.
+        $counted = "SELECT COUNT(*) FROM oauth_clients c WHERE c.registration = 'dcr' AND (c.created_at >= ? OR EXISTS (SELECT 1 FROM oauth_grants g WHERE g.client_id = c.client_id))";
+        // stale unused rows are pruned once the table is 90% of the cap in size, before counting
+        if ((int) $pdo->query("SELECT COUNT(*) FROM oauth_clients WHERE registration = 'dcr'")->fetchColumn() >= self::MAX_CLIENTS * 0.9) {
+            self::pruneUnused($pdo, $cutoff);
+        }
+        $st = $pdo->prepare($counted);
+        $st->execute([$cutoff]);
+        $count = (int) $st->fetchColumn();
         if ($count >= self::MAX_CLIENTS) {
             throw new \OverflowException('registration capacity reached');
         }
@@ -145,6 +157,14 @@ final class ClientRegistry
             'grant_types' => ['authorization_code', 'refresh_token'],
             'response_types' => ['code'],
         ];
+    }
+
+    /** Delete DCR clients created before $cutoffDb that never had a grant. @return int rows deleted */
+    public static function pruneUnused(\PDO $pdo, string $cutoffDb): int
+    {
+        $st = $pdo->prepare("DELETE FROM oauth_clients WHERE registration = 'dcr' AND created_at < ? AND client_id NOT IN (SELECT client_id FROM oauth_grants)");
+        $st->execute([$cutoffDb]);
+        return $st->rowCount();
     }
 
     // ---------------------------------------------------------------- lookup (DCR row or CIMD document)

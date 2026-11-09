@@ -362,7 +362,7 @@ final class OAuthFuzzTest extends FuzzCase
             parse_str($loc === null ? '' : (string) parse_url($loc, PHP_URL_QUERY), $rq);
             $gotCode = isset($rq['code']);
             $credsOk = $attack === 'happy' || ($attack === 'form_fuzz' && ($form['req'] ?? null) === $flow['req'] && ($form['csrf'] ?? null) === $flow['csrf'] && ($form['decision'] ?? null) === 'allow'
-                && is_string($form['email'] ?? null) && trim($form['email']) === $this->w->owner['email'] && ($form['password'] ?? null) === $this->w->owner['password'] && is_string($form['totp'] ?? null) && preg_replace('/\s+/', '', $form['totp']) === $this->expectedTotp());
+                && is_string($form['email'] ?? null) && strtolower(trim($form['email'])) === $this->w->owner['email'] && ($form['password'] ?? null) === $this->w->owner['password'] && is_string($form['totp'] ?? null) && preg_replace('/\s+/', '', $form['totp']) === $this->expectedTotp());
             if ($gotCode) {
                 $this->ensure($credsOk, "an authorization code was issued although the attack was '$attack'");
                 $code = $rq['code'];

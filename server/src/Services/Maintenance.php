@@ -5,6 +5,8 @@ namespace StretchEffect\Services;
 
 use StretchEffect\Db;
 use StretchEffect\Google\GoogleCalendar;
+use StretchEffect\OAuth\ClientRegistry;
+use StretchEffect\Session\NativeSession;
 use StretchEffect\Support\Log;
 use StretchEffect\Support\Time;
 
@@ -15,6 +17,7 @@ final class Maintenance
         private readonly Db $db,
         private readonly SettingsService $settings,
         private readonly GoogleCalendar $google,
+        private readonly ?string $sessionPath = null,
     ) {
     }
 
@@ -43,12 +46,21 @@ final class Maintenance
         $now = $this->db->now();
         $day = Time::toDb($now->modify('-1 day'));
         $week = Time::toDb($now->modify('-7 days'));
+        $audit180 = Time::toDb($now->modify('-180 days'));
+        $audit365 = Time::toDb($now->modify('-365 days'));
         return [
             'oauth_codes' => $this->db->run('DELETE FROM oauth_codes WHERE expires_at < ?', [$day]),
             'oauth_tokens' => $this->db->run('DELETE FROM oauth_tokens WHERE expires_at < ?', [$day]),
             'rate_limits' => $this->db->run('DELETE FROM rate_limits WHERE expires_at < ?', [Time::toDb($now)]),
             'idempotency_keys' => $this->db->run('DELETE FROM idempotency_keys WHERE created_at < ?', [$week]),
             'calendar_busy' => $this->db->run('DELETE FROM calendar_busy WHERE end_at < ?', [$day]),
+            // DCR clients that never got a grant: strangers could otherwise fill the registration cap for good.
+            'oauth_clients' => ClientRegistry::pruneUnused($this->db->pdo(), Time::toDb($now->modify('-' . ClientRegistry::UNUSED_TTL_SECONDS . ' seconds'))),
+            // Sessions that never signed in are dropped after 2 h (signed-in ones keep the 14-day cookie lifetime).
+            'sessions' => $this->sessionPath === null ? 0 : NativeSession::pruneAnonymous($this->sessionPath),
+            // Audit retention: 180 days, connector / sign-in rows 365 days.
+            'audit_log' => $this->db->run('DELETE FROM audit_log WHERE at < ? AND NOT (' . AuditLog::LONG_KEPT_SQL . ')', [$audit180])
+                + $this->db->run('DELETE FROM audit_log WHERE at < ?', [$audit365]),
         ];
     }
 }

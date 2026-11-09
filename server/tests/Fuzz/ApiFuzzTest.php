@@ -148,7 +148,7 @@ final class ApiFuzzTest extends FuzzCase
                     ['POST', '/api/admin/connector/pairing', [], null, []], ['POST', '/api/admin/connector/pairing/close', [], null, []],
                 ]);
             case 'cron':
-                return ['POST', '/api/cron/sync', [], null, $r->pick([['x-cron-token' => 'cron-secret-token'], ['x-cron-token' => 'wrong'], [], ['x-cron-token' => ''], ['x-cron-token' => 'cron-secret-token ']])];
+                return ['POST', '/api/cron/sync', [], null, $r->pick([['x-cron-token' => 'cron-secret-token-0123456789-abcdefghij'], ['x-cron-token' => 'wrong'], [], ['x-cron-token' => ''], ['x-cron-token' => 'cron-secret-token-0123456789-abcdefghij ']])];
             case 'callback':
                 $st = (string) ($this->actors[$role === 'none' ? 'anon' : $role]->session()->get('google_state') ?? 'none');
                 return ['GET', '/api/admin/calendar/callback', $r->pick([['state' => $st, 'code' => 'abc'], ['state' => $st], ['state' => 'x', 'code' => 'abc'], ['error' => 'access_denied', 'state' => $st], []]), null, []];

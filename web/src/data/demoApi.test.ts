@@ -225,6 +225,8 @@ describe('owner actions', () => {
     const pr = await demoApi.requestPack('ten');
     await asOwner();
     expect(await code(demoApi.adminMarkPackPaid('nope'))).toBe('not_found');
+    expect(await code(demoApi.adminMarkPackPaid(pr.id, '\u0420AY-100'))).toBe('validation');
+    expect(await code(demoApi.adminMarkPackPaid(pr.id, 'ab'))).toBe('validation');
     const paid = await demoApi.adminMarkPackPaid(pr.id, '  EFT-77 ');
     expect(paid).toMatchObject({ status: 'paid', paymentReference: 'EFT-77' });
     expect(paid.paidAt).toBe(new Date(NOW).toISOString());
@@ -368,7 +370,7 @@ describe('owner actions', () => {
     expect(week.freeSlotHours).toBe(Math.round((demoStore.freeSlots('2026-11-09', '2026-11-15').length * 30) / 60));
     expect(month.freeSlotHours).toBeGreaterThan(week.freeSlotHours);
     demoStore.save((s) => void s.packRequests.push({ id: 'pz', userId: 'u_ruan', packageId: 'five', sessions: 5, priceZar: 2500, status: 'pending', createdAt: new Date(NOW).toISOString() }));
-    await demoApi.adminMarkPackPaid('pz', 'r');
+    await demoApi.adminMarkPackPaid('pz', 'REF-1');
     expect((await demoApi.adminSummary('week')).creditsSold).toBe(5);
   });
 });

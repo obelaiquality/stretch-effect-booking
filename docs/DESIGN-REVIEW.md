@@ -53,6 +53,25 @@ It is not yet premium. Five issues hold it back:
 | 11 | Disabled buttons: neutral grey fill and grey text, not 45% opacity red. | Medium | S |
 | 12 | Write a DESIGN.md (format in section 9) so later work keeps the system. | Medium | M |
 
+## Status after the design pass (9 November 2026)
+
+| # | Fix | Status |
+| --- | --- | --- |
+| 1 | Red whitelist, one filled red button per view | Done. An automated audit of 12 pages at 1280 and 390 px finds at most one filled red button per screen. |
+| 2 | Real photos | Ready, waiting for Ivan. The hero and a gallery render from `web/src/content/photos.ts`; the list is empty, so no photo slots show. |
+| 3 | Cinzel only for the wordmark and slogans | Done. The audit finds no Cinzel under 16 px outside the logo. |
+| 4 | Contrast | Done. `--red-text` (6.1:1) for small red text, `--edge` (3.7:1) for control borders. |
+| 5 | Skeletons, empty and error states | Done on every page and route. |
+| 6 | Owner calendar on phones | Done: day strip and one-day view under 768 px. |
+| 7 | One wording, "Book a session" | Done. |
+| 8 | One date format | Done: `web/src/lib/format.ts`. |
+| 9 | Booking page states and grouping | Done: tap to confirm, Morning/Afternoon/Evening, Closed / Fully booked / Too soon, "Yours" chips, .ics file. |
+| 10 | No slogans, red full stops or "Owner" eyebrows in the app | Done. |
+| 11 | Neutral disabled buttons | Done. |
+| 12 | DESIGN.md | Done: `docs/DESIGN.md`. |
+
+Not done: A2 (a sign-in link without a password) is a phase-2 feature.
+
 ## What works (keep)
 
 - **Brand match.** The palette, the Anton headlines with red second lines, the brush-stroke offer

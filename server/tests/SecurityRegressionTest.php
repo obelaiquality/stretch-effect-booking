@@ -467,7 +467,7 @@ final class SecurityRegressionTest extends TestCase
         $this->assertContains('untrusted_name', $r['untrusted_fields']);
 
         $c = $this->mcp($token, 'get_client', ['client_id' => $r['clients'][0]['client_id']])['result']['structuredContent'];
-        $this->assertSame(['untrusted_name', 'untrusted_note'], $c['untrusted_fields']);
+        $this->assertSame(['untrusted_name', 'untrusted_email', 'untrusted_note'], $c['untrusted_fields']);
 
         foreach (['get_schedule' => [], 'get_business_summary' => ['period' => 'week'], 'find_free_slots' => ['from' => '2026-11-10', 'to' => '2026-11-10'],
                   'list_bookings' => ['from' => '2026-11-10', 'to' => '2026-11-12']] as $tool => $args) {

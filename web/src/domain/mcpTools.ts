@@ -122,7 +122,7 @@ export const TOOLS: ToolDef[] = [
         client_id: p.clientId,
         sessions: p.sessions,
         reason: p.reason,
-        payment_reference: { type: 'string', description: 'Bank or EFT reference, if known.', maxLength: 60 },
+        payment_reference: { type: 'string', description: 'Bank or EFT reference, if known: 3 to 60 characters, letters, digits, spaces and . _ / # - only.', minLength: 3, maxLength: 60 },
         idempotency_key: p.idem,
       },
       ['client_id', 'sessions', 'reason', 'idempotency_key'],
@@ -199,6 +199,16 @@ export function validateArgs(schema: JsonSchema, args: unknown): string[] {
 }
 
 // ---------------------------------------------------------------- helpers
+/**
+ * Payment reference rule shared with the server (PaymentReferences::canonical): remove format characters (zero-width, soft
+ * hyphen, BOM), fold with NFKC, trim and collapse spaces, then accept only ASCII `[A-Za-z0-9 ._/#-]{3,60}`.
+ * Returns the upper-cased reference, undefined when nothing was supplied, or null when the text is not allowed.
+ */
+export function canonicalPaymentReference(raw: string): string | undefined | null {
+  const r = raw.replace(/\p{Cf}+/gu, '').normalize('NFKC').replace(/\p{Cf}+/gu, '').replace(/ {2,}/g, ' ').trim();
+  if (r === '') return undefined;
+  return /^[A-Za-z0-9 ._/#-]{3,60}$/.test(r) ? r.toUpperCase() : null;
+}
 const fail = (summary: string, error: string): McpCallResult => ({ ok: false, summary, error });
 const clean = (s: string) => s.replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 60);
 /** UTC ISO -> local "YYYY-MM-DDTHH:MM" */
@@ -310,7 +320,7 @@ const HANDLERS: Record<string, Handler> = {
       result: {
         client_id: u.id,
         name: clean(u.name),
-        email: u.email,
+        untrusted_email: u.email,
         sessions_left: sum?.balance ?? ctx.balance(u.id),
         upcoming_bookings: upcoming,
         last_visit: sum?.lastVisit ? toLocal(sum.lastVisit) : null,
@@ -347,7 +357,10 @@ const HANDLERS: Record<string, Handler> = {
     if (!u) return fail('Client not found', 'not_found');
     const n = a.sessions as number;
     if (usedToday(ctx) + n > DAILY_CREDIT_CAP) return fail(`Daily limit reached: ChatGPT can change at most ${DAILY_CREDIT_CAP} sessions a day. Use the admin screen for more.`, 'daily_cap');
-    const ref = (a.payment_reference as string | undefined)?.trim() || undefined;
+    // Same rule as the server: invisible characters removed, NFKC, then ASCII `[A-Za-z0-9 ._/#-]{3,60}` only.
+    const rawRef = a.payment_reference as string | undefined;
+    const ref = rawRef === undefined ? undefined : canonicalPaymentReference(rawRef);
+    if (ref === null) return fail('The payment reference must be 3 to 60 characters: letters, digits, spaces and . _ / # - only.', 'invalid_params');
     const note = `${a.reason as string}${ref ? ` (ref ${ref})` : ''}`;
     // A matching pack request waiting for payment gets settled, so the owner's pending list stays right.
     const pending = ctx.getState().packRequests.find((r) => r.userId === u.id && r.status === 'pending' && r.sessions === n);

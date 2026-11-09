@@ -319,9 +319,9 @@
                     },
                     "payment_reference": {
                         "type": "string",
-                        "minLength": 1,
+                        "minLength": 3,
                         "maxLength": 60,
-                        "description": "Optional payment reference. Each reference can be used once, ever (case and spacing are ignored)."
+                        "description": "Optional payment reference: 3 to 60 characters, letters, digits, spaces and . _ / # - only. Each reference can be used once, ever (case and spacing are ignored)."
                     },
                     "idempotency_key": {
                         "type": "string",
@@ -368,7 +368,7 @@
         {
             "name": "remove_session_credits",
             "title": "Remove session credits",
-            "description": "Remove 1-20 sessions from a client (a correction). Cannot take a balance below zero. Needs a reason and a unique idempotency_key.",
+            "description": "Remove 1-20 sessions from a client (a correction). Cannot take a balance below zero. At most 40 sessions can be removed per day through ChatGPT. Needs a reason and a unique idempotency_key.",
             "inputSchema": {
                 "type": "object",
                 "properties": {

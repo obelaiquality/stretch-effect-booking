@@ -69,6 +69,29 @@ final class Db implements Database
                 $this->depth--;
             }
         }
+        // A MySQL deadlock (SQLSTATE 40001 / error 1213) rolls the whole transaction back and is safe to run again.
+        for ($attempt = 1;; $attempt++) {
+            try {
+                return $this->runTransaction($fn);
+            } catch (\PDOException $e) {
+                if ($attempt >= self::DEADLOCK_ATTEMPTS || !self::isDeadlock($e)) {
+                    throw $e;
+                }
+                usleep(random_int(20000, 80000));
+            }
+        }
+    }
+
+    private const DEADLOCK_ATTEMPTS = 3;
+
+    public static function isDeadlock(\PDOException $e): bool
+    {
+        $info = $e->errorInfo;
+        return (string) $e->getCode() === '40001' || (is_array($info) && (($info[0] ?? '') === '40001' || (int) ($info[1] ?? 0) === 1213));
+    }
+
+    private function runTransaction(callable $fn): mixed
+    {
         // SQLite: BEGIN IMMEDIATE takes the write lock up front (serialises bookings).
         $this->pdo->exec($this->driver === 'sqlite' ? 'BEGIN IMMEDIATE' : 'START TRANSACTION');
         $this->depth = 1;

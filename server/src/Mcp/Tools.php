@@ -11,6 +11,7 @@ use StretchEffect\Services\PaymentReferences;
 final class Tools
 {
     public const DAILY_CREDIT_CAP = 40;
+    public const DAILY_CREDIT_REMOVE_CAP = 40;
     public const MAX_CREDITS_PER_CALL = 20;
     private const TZ = 'Africa/Johannesburg';
     private const LIST_CAP = 50;
@@ -76,13 +77,13 @@ final class Tools
                     'client_id' => self::ID,
                     'sessions' => ['type' => 'integer', 'minimum' => 1, 'maximum' => self::MAX_CREDITS_PER_CALL],
                     'reason' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 200, 'description' => 'Why, for example "paid EFT for 5-pack".'],
-                    'payment_reference' => ['type' => 'string', 'minLength' => 1, 'maxLength' => 60, 'description' => 'Optional payment reference. Each reference can be used once, ever (case and spacing are ignored).'],
+                    'payment_reference' => ['type' => 'string', 'minLength' => 3, 'maxLength' => 60, 'description' => 'Optional payment reference: 3 to 60 characters, letters, digits, spaces and . _ / # - only. Each reference can be used once, ever (case and spacing are ignored).'],
                     'idempotency_key' => self::IDEM,
                 ], ['client_id', 'sessions', 'reason', 'idempotency_key']),
             ],
             'remove_session_credits' => [
                 'title' => 'Remove session credits', 'scope' => 'credits:write', 'write' => true, 'destructive' => true,
-                'description' => 'Remove 1-20 sessions from a client (a correction). Cannot take a balance below zero. Needs a reason and a unique idempotency_key.',
+                'description' => 'Remove 1-20 sessions from a client (a correction). Cannot take a balance below zero. At most 40 sessions can be removed per day through ChatGPT. Needs a reason and a unique idempotency_key.',
                 'schema' => $obj([
                     'client_id' => self::ID,
                     'sessions' => ['type' => 'integer', 'minimum' => 1, 'maximum' => self::MAX_CREDITS_PER_CALL],
@@ -155,8 +156,8 @@ final class Tools
     {
         return match ($tool) {
             'get_schedule', 'list_bookings', 'create_booking', 'cancel_booking', 'reschedule_booking' => ['untrusted_client_name'],
-            'search_clients' => ['untrusted_name'],
-            'get_client' => ['untrusted_name', 'untrusted_note'],
+            'search_clients' => ['untrusted_name', 'untrusted_email'],
+            'get_client' => ['untrusted_name', 'untrusted_email', 'untrusted_note'],
             'add_session_credits', 'remove_session_credits' => ['untrusted_client_name'],
             default => [],
         };
@@ -281,7 +282,7 @@ final class Tools
         return [
             'client_id' => (string) ($u['id'] ?? ''),
             'untrusted_name' => self::text($u['name'] ?? '', self::NAME_MAX),
-            'email' => self::text($u['email'] ?? '', 120),
+            'untrusted_email' => self::text($u['email'] ?? '', 120),
             'balance' => (int) ($c['balance'] ?? 0),
             'upcoming_bookings' => (int) ($c['upcoming'] ?? 0),
         ];
@@ -349,7 +350,7 @@ final class Tools
         }
         $name = self::text(($client['summary']['user']['name'] ?? $client['summary']['name'] ?? ''), self::NAME_MAX);
         $n = $a['sessions'];
-        $ref = isset($a['payment_reference']) ? PaymentReferences::normalize((string) $a['payment_reference']) : null;
+        $ref = isset($a['payment_reference']) ? PaymentReferences::canonical((string) $a['payment_reference']) : null;
         $ref = $ref === '' ? null : $ref;
         $reason = self::text($a['reason'], 200);
         if ($reason === '') {
@@ -359,12 +360,12 @@ final class Tools
         $db = $this->s->db();
 
         $db->transaction(function () use ($db, $a, $grantId, $sign, $n, $ref, $note) {
+            // Single serialisation point for every ChatGPT credit write (add and remove, same lock order): lock the owner row
+            // first, then read the daily total. Concurrent calls queue on this lock (MySQL); SQLite's BEGIN IMMEDIATE already
+            // serialises. The SUM read below is the first plain read of the transaction, so it sees the previous holder's commit.
+            $pdo = $db->pdo();
+            $pdo->query("SELECT id FROM users WHERE role = 'owner' ORDER BY id LIMIT 1" . ($db->driver() === 'mysql' ? ' FOR UPDATE' : ''))->fetchColumn();
             if ($sign > 0) {
-                // Single serialisation point for every ChatGPT credit write: lock the owner row first, then read the
-                // daily total. Concurrent adds queue on this lock (MySQL); SQLite's BEGIN IMMEDIATE already serialises.
-                // The SUM read below is the first plain read of the transaction, so it sees the previous holder's commit.
-                $pdo = $db->pdo();
-                $pdo->query("SELECT id FROM users WHERE role = 'owner' ORDER BY id LIMIT 1" . ($db->driver() === 'mysql' ? ' FOR UPDATE' : ''))->fetchColumn();
                 $today = $this->s->credits()->chatgptAddedToday();
                 if ($today + $n > self::DAILY_CREDIT_CAP) {
                     throw new ToolInputError('Daily limit: at most ' . self::DAILY_CREDIT_CAP . ' sessions can be added through ChatGPT per day ('
@@ -374,8 +375,15 @@ final class Tools
                     // Permanent, normalised, shared with the owner's "mark pack paid"; same transaction as the ledger row.
                     PaymentReferences::claim($pdo, $ref, $a['client_id'], 'chatgpt', $db->now()->format('Y-m-d H:i:s'));
                 }
-            } elseif ($this->s->credits()->balance($a['client_id']) < $n) {
-                throw new DomainError('no_credits', 'The client only has ' . $this->s->credits()->balance($a['client_id']) . ' session(s); the balance cannot go below zero.');
+            } else {
+                $today = $this->s->credits()->chatgptRemovedToday();
+                if ($today + $n > self::DAILY_CREDIT_REMOVE_CAP) {
+                    throw new ToolInputError('Daily limit: at most ' . self::DAILY_CREDIT_REMOVE_CAP . ' sessions can be removed through ChatGPT per day ('
+                        . $today . ' already removed today). Use the admin page for larger changes.');
+                }
+                if ($this->s->credits()->balance($a['client_id']) < $n) {
+                    throw new DomainError('no_credits', 'The client only has ' . $this->s->credits()->balance($a['client_id']) . ' session(s); the balance cannot go below zero.');
+                }
             }
             $this->s->credits()->adjust($a['client_id'], $sign * $n, 'chatgpt_adjust', $note, $this->actor($grantId));
         });

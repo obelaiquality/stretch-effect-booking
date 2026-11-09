@@ -160,6 +160,12 @@ final class FakeCredits implements CreditService
         $st->execute([$this->db->now->format('Y-m-d')]);
         return (int) $st->fetchColumn();
     }
+    public function chatgptRemovedToday(): int
+    {
+        $st = $this->db->pdo->prepare("SELECT COALESCE(SUM(delta),0) FROM credit_ledger WHERE reason = 'chatgpt_adjust' AND delta < 0 AND substr(created_at,1,10) = ?");
+        $st->execute([$this->db->now->format('Y-m-d')]);
+        return -(int) $st->fetchColumn();
+    }
     public function markPackPaid(string $packRequestId, ?string $paymentReference, string $actor): array { return []; }
 }
 

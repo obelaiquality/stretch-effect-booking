@@ -44,8 +44,12 @@ final class AuthService implements AuthServiceContract
     public function verifyPassword(string $email, string $password, string $ip): ?array
     {
         $email = strtolower(trim($email));
-        $emailKey = hash('sha256', $email);
-        $pairKey = hash('sha256', $email . '|' . $ip);
+        $row = $this->db->one('SELECT ' . self::PUBLIC_COLS . ', password_hash FROM users WHERE email = ?', [$email]);
+        // Key the limiters on the stored address when the user exists: MySQL's collation treats look-alike spellings as the
+        // same email, so a variant must not get a fresh budget.
+        $canon = is_array($row) ? strtolower((string) $row['email']) : $email;
+        $emailKey = hash('sha256', $canon);
+        $pairKey = hash('sha256', $canon . '|' . $ip);
         // Strict limiter per email+IP (a stranger cannot burn the owner's own budget from another address); a looser
         // per-email limiter still slows a distributed guesser. All three are one generic message.
         if (!$this->limiter->hit('login_ip', $ip, 20, 900)
@@ -53,7 +57,6 @@ final class AuthService implements AuthServiceContract
             || !$this->limiter->hit('login_email', $emailKey, 30, 900)) {
             throw new DomainError('rate_limited', 'Too many sign-in attempts. Please wait a few minutes and try again.');
         }
-        $row = $this->db->one('SELECT ' . self::PUBLIC_COLS . ', password_hash FROM users WHERE email = ?', [$email]);
         // Always run a hash verification so timing does not reveal whether the email exists.
         static $dummy = null;
         $dummy ??= self::hashPassword('dummy-password-for-timing');

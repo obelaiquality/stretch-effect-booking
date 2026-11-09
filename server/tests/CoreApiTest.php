@@ -207,7 +207,7 @@ final class CoreApiTest extends TestCase
         $app = CoreTestKit::app();
         $this->assertSame(403, CoreTestKit::call($app, 'POST', '/api/cron/sync', [], csrf: false)['status']);
         $this->assertSame(403, CoreTestKit::call($app, 'POST', '/api/cron/sync', [], csrf: false, headers: ['X-Cron-Token' => 'nope'])['status']);
-        $r = CoreTestKit::call($app, 'POST', '/api/cron/sync', [], csrf: false, headers: ['X-Cron-Token' => 'cron-secret-token']);
+        $r = CoreTestKit::call($app, 'POST', '/api/cron/sync', [], csrf: false, headers: ['X-Cron-Token' => 'cron-secret-token-0123456789-abcdefghij']);
         $this->assertSame(200, $r['status']);
         $this->assertTrue($r['json']['ok']);
     }

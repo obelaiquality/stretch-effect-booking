@@ -16,6 +16,45 @@ final class NativeSession implements SessionStore
     ) {
     }
 
+    /** Anonymous (no signed-in user) session files are removed after this many seconds of inactivity, by Maintenance. */
+    public const ANONYMOUS_MAX_AGE = 7200;
+
+    /** True when the request carries our session cookie (so there may be a session worth loading). */
+    private function hasCookie(): bool
+    {
+        return isset($_COOKIE[$this->name]) && is_string($_COOKIE[$this->name]) && $_COOKIE[$this->name] !== '';
+    }
+
+    /** Reads and removals never create a session for a visitor without one. */
+    private function canSkip(): bool
+    {
+        return !$this->started && session_status() !== PHP_SESSION_ACTIVE && !$this->hasCookie();
+    }
+
+    /**
+     * Delete session files older than $maxAge seconds that never held a signed-in user (no `uid` key). Signed-in sessions
+     * live for the full cookie lifetime (PHP's own GC, gc_maxlifetime). @return int files deleted
+     */
+    public static function pruneAnonymous(string $savePath, int $maxAge = self::ANONYMOUS_MAX_AGE, ?int $now = null): int
+    {
+        $now ??= time();
+        $n = 0;
+        foreach (glob(rtrim($savePath, '/') . '/sess_*') ?: [] as $file) {
+            $mtime = @filemtime($file);
+            if ($mtime === false || $mtime >= $now - $maxAge) {
+                continue;
+            }
+            $body = @file_get_contents($file);
+            if ($body === false || str_contains($body, 'uid|s:')) {
+                continue;
+            }
+            if (@unlink($file)) {
+                $n++;
+            }
+        }
+        return $n;
+    }
+
     private function start(): void
     {
         if ($this->started) {
@@ -48,6 +87,9 @@ final class NativeSession implements SessionStore
 
     public function get(string $key, mixed $default = null): mixed
     {
+        if ($this->canSkip()) {
+            return $default;
+        }
         $this->start();
         return $_SESSION[$key] ?? $default;
     }
@@ -60,6 +102,9 @@ final class NativeSession implements SessionStore
 
     public function remove(string $key): void
     {
+        if ($this->canSkip()) {
+            return;
+        }
         $this->start();
         unset($_SESSION[$key]);
     }

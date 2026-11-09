@@ -301,7 +301,7 @@ describe('read tools return exact data', () => {
     });
     const r = await run('get_client', { client_id: 'u_thandi' });
     expect(r.result).toEqual({
-      client_id: 'u_thandi', name: 'Thandi Mokoena', email: 'thandi@example.com', sessions_left: 4,
+      client_id: 'u_thandi', name: 'Thandi Mokoena', untrusted_email: 'thandi@example.com', sessions_left: 4,
       upcoming_bookings: [
         { booking_id: 'b_a', client_id: 'u_thandi', client_name: 'Thandi Mokoena', start: '2026-11-10T10:00', end: '2026-11-10T11:00', status: 'confirmed' },
         { booking_id: 'b_b', client_id: 'u_thandi', client_name: 'Thandi Mokoena', start: '2026-11-12T10:00', end: '2026-11-12T11:00', status: 'confirmed' },
