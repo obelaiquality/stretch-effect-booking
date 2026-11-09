@@ -121,7 +121,8 @@ final class BookingService implements BookingServiceContract
         }
         $d = DateTimeImmutable::createFromFormat('!Y-m-d\TH:i', $local, Time::tz())
             ?: DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:s', $local, Time::tz());
-        if ($d === false) {
+        // createFromFormat() rolls impossible dates over (2026-13-10 becomes 2027-01-10): only accept what round-trips
+        if ($d === false || $d->format(strlen($local) === 16 ? 'Y-m-d\TH:i' : 'Y-m-d\TH:i:s') !== $local) {
             throw new DomainError('validation', 'Time must look like 2026-11-09T09:30');
         }
         return Time::iso($d);

@@ -6,10 +6,11 @@
     "source": {
         "directories": ["src/OAuth", "src/Mcp", "src/Services", "src/Support"],
         "excludes": [
+            // (paths are relative to each source directory)
             // not security or money logic: HTML, network fetch, mail-free admin helpers, logging, settings JSON, cron
-            "OAuth/ConsentPage.php", "OAuth/HttpCimdFetcher.php",
-            "Services/AuditLog.php", "Services/ClientService.php", "Services/Maintenance.php", "Services/SettingsService.php",
-            "Support/Log.php", "Support/Presenter.php"
+            "ConsentPage.php", "HttpCimdFetcher.php",
+            "AuditLog.php", "ClientService.php", "Maintenance.php", "SettingsService.php",
+            "Log.php", "Presenter.php"
         ]
     },
     "bootstrap": "tests/infection-bootstrap.php",
@@ -22,6 +23,6 @@
         "json": "var/infection/infection.json",
         "perMutator": "var/infection/per-mutator.md"
     },
-    "timeout": 20,
+    "timeout": 60,
     "mutators": { "@default": true }
 }

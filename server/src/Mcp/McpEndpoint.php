@@ -140,7 +140,7 @@ final class McpEndpoint implements RouteHandler
     private function bearer(HttpRequest $r): ?array
     {
         $h = $r->header('authorization');
-        if ($h === null || preg_match('/^Bearer ([A-Za-z0-9_-]{20,200})$/', $h, $m) !== 1) {
+        if ($h === null || preg_match('/^Bearer ([A-Za-z0-9_-]{20,200})$/D', $h, $m) !== 1) {
             return null;
         }
         return $this->tokens->authenticate($m[1]);

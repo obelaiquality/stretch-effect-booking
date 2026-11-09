@@ -14,6 +14,7 @@ use StretchEffect\Support\Time;
 final class AuthService implements AuthServiceContract
 {
     private const PUBLIC_COLS = 'id, role, name, email, phone, totp_enabled, created_at';
+    private const ARGON2ID_OPTIONS = ['memory_cost' => 19456, 'time_cost' => 2, 'threads' => 1];
 
     public function __construct(
         private readonly Db $db,
@@ -29,7 +30,7 @@ final class AuthService implements AuthServiceContract
     public static function hashPassword(string $password): string
     {
         if (defined('PASSWORD_ARGON2ID')) {
-            return password_hash($password, PASSWORD_ARGON2ID, ['memory_cost' => 19456, 'time_cost' => 2, 'threads' => 1]);
+            return password_hash($password, PASSWORD_ARGON2ID, self::ARGON2ID_OPTIONS);
         }
         return password_hash($password, PASSWORD_DEFAULT);
     }
@@ -62,7 +63,10 @@ final class AuthService implements AuthServiceContract
         }
         $this->limiter->reset('login_email_ip', $pairKey);
         $this->limiter->reset('login_email', $emailKey);
-        if (password_needs_rehash($row['password_hash'], defined('PASSWORD_ARGON2ID') ? PASSWORD_ARGON2ID : PASSWORD_DEFAULT)) {
+        // the same options as hashPassword(): without them every argon2id hash looks outdated and is rewritten on each login
+        if (defined('PASSWORD_ARGON2ID')
+            ? password_needs_rehash($row['password_hash'], PASSWORD_ARGON2ID, self::ARGON2ID_OPTIONS)
+            : password_needs_rehash($row['password_hash'], PASSWORD_DEFAULT)) {
             $this->db->run('UPDATE users SET password_hash = ? WHERE id = ?', [self::hashPassword($password), $row['id']]);
         }
         unset($row['password_hash']);

@@ -83,7 +83,8 @@ final class FakeConfig implements Config
         return $cur;
     }
     public function baseUrl(): string { return 'https://studio.test'; }
-    public function isLive(): bool { return true; }
+    public bool $live = true;
+    public function isLive(): bool { return $this->live; }
 }
 
 final class FakeCrypto implements Crypto

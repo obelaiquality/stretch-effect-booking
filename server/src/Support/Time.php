@@ -51,7 +51,7 @@ final class Time
     /** Parse an ISO 8601 instant with Z or offset. Null when invalid. */
     public static function parseIso(string $s): ?DateTimeImmutable
     {
-        if (!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/', $s)) {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/D', $s)) {
             return null;
         }
         try {
