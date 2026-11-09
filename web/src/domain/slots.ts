@@ -56,8 +56,14 @@ export function localToUtc(local: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(local);
   if (!m) throw new Error(`Bad local datetime: ${local}`);
   const [, y, mo, d, h, mi] = m.map(Number) as unknown as number[];
-  const ms = Date.UTC(y, mo - 1, d, h, mi) - TZ_OFFSET_MIN * MIN;
-  return new Date(ms).toISOString();
+  // Reject dates that do not exist (30 Feb, month 13, 25:00) instead of letting Date roll them over.
+  const probe = new Date(0);
+  probe.setUTCFullYear(y, mo - 1, d); // setUTCFullYear keeps years 0-99 as given (Date.UTC would map them to 19xx)
+  probe.setUTCHours(h, mi, 0, 0);
+  if (probe.getUTCFullYear() !== y || probe.getUTCMonth() !== mo - 1 || probe.getUTCDate() !== d || probe.getUTCHours() !== h || probe.getUTCMinutes() !== mi) {
+    throw new Error(`Bad local datetime: ${local}`);
+  }
+  return new Date(probe.getTime() - TZ_OFFSET_MIN * MIN).toISOString();
 }
 
 /** Add days to a YYYY-MM-DD key. */

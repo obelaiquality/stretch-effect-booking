@@ -17,7 +17,8 @@ final class PaymentReferences
     {
         $r = preg_replace('/[\p{C}\p{Zl}\p{Zp}]+/u', ' ', $ref) ?? '';
         $r = trim(preg_replace('/\s+/u', ' ', $r) ?? '');
-        return mb_strtoupper(mb_substr($r, 0, 80));
+        // upper-case first (a letter like the German sharp s grows), then cut to the column size, then drop a space the cut may leave at the end
+        return rtrim(mb_substr(mb_strtoupper($r), 0, 80));
     }
 
     /**

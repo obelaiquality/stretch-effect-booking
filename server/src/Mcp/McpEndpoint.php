@@ -241,11 +241,14 @@ final class McpEndpoint implements RouteHandler
         $name = $params['name'] ?? null;
         $defs = Tools::definitions();
         if (!is_string($name) || !isset($defs[$name])) {
+            // The name is attacker-chosen, so it is not written to the log; the row only records that an unknown tool was asked for.
+            $this->audit($grantId, $actor, 'tools/call', [], 'error', 'unknown tool', $ip);
             return $this->rpcError($id, -32602, 'Unknown tool.', 200);
         }
         $def = $defs[$name];
         $rawArgs = $params['arguments'] ?? [];
         if (!is_array($rawArgs) || ($rawArgs !== [] && array_is_list($rawArgs))) {
+            $this->audit($grantId, $actor, $name, [], 'error', 'arguments must be an object', $ip);
             return $this->rpcError($id, -32602, 'arguments must be an object.', 200);
         }
 
@@ -275,6 +278,7 @@ final class McpEndpoint implements RouteHandler
                     return $this->toolError($id, 'That idempotency_key was already used for a different request. Use a new key for a new change.');
                 }
                 if ($replay['kind'] === 'pending') {
+                    $this->audit($grantId, $actor, $name, Redactor::redact($args), 'error', 'idempotency_key still being processed', $ip);
                     return $this->toolError($id, 'A request with this idempotency_key is still being processed. Wait a moment and check before retrying.');
                 }
                 $res = $replay['result'];

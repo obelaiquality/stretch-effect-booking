@@ -175,7 +175,7 @@ final class Tools
         $t = is_scalar($v) ? (string) $v : '';
         $t = preg_replace('/[\p{C}\p{Zl}\p{Zp}]+/u', ' ', $t) ?? '';
         $t = trim(preg_replace('/\s+/u', ' ', $t) ?? '');
-        return mb_strlen($t) > $max ? mb_substr($t, 0, $max) : $t;
+        return mb_strlen($t) > $max ? rtrim(mb_substr($t, 0, $max)) : $t;
     }
 
     private function local(?string $utc): ?string

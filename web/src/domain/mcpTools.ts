@@ -62,6 +62,7 @@ const READ = { readOnlyHint: true, destructiveHint: false, openWorldHint: false 
 const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true, openWorldHint: false } as const;
 
+// Stryker disable StringLiteral: tool titles and descriptions are prose shown to ChatGPT, not behaviour.
 export const TOOLS: ToolDef[] = [
   {
     name: 'get_schedule',
@@ -168,16 +169,19 @@ export const TOOLS: ToolDef[] = [
     annotations: WRITE, scope: 'bookings:write', write: true,
   },
 ];
+// Stryker restore StringLiteral
 
 // ---------------------------------------------------------------- validation
 export function validateArgs(schema: JsonSchema, args: unknown): string[] {
   const errs: string[] = [];
   if (args === null || typeof args !== 'object' || Array.isArray(args)) return ['arguments must be an object'];
   const a = args as Record<string, unknown>;
-  for (const k of Object.keys(a)) if (!(k in schema.properties)) errs.push(`unknown field "${k}"`);
-  for (const k of schema.required) if (a[k] === undefined || a[k] === null) errs.push(`"${k}" is required`);
+  // hasOwn, not `in`: "__proto__", "constructor", "toString" exist on every object and must not count as known fields.
+  const own = (k: string) => (Object.hasOwn(a, k) ? a[k] : undefined);
+  for (const k of Object.keys(a)) if (!Object.hasOwn(schema.properties, k)) errs.push(`unknown field "${k}"`);
+  for (const k of schema.required) if (own(k) === undefined || own(k) === null) errs.push(`"${k}" is required`);
   for (const [k, def] of Object.entries(schema.properties)) {
-    const v = a[k];
+    const v = own(k);
     if (v === undefined) continue;
     if (def.type === 'string') {
       if (typeof v !== 'string') { errs.push(`"${k}" must be a string`); continue; }
@@ -199,6 +203,14 @@ const fail = (summary: string, error: string): McpCallResult => ({ ok: false, su
 const clean = (s: string) => s.replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 60);
 /** UTC ISO -> local "YYYY-MM-DDTHH:MM" */
 const toLocal = (isoUtc: string) => `${localDayKey(isoUtc)}T${formatLocalTime(isoUtc)}`;
+/** localToUtc that reports impossible dates (30 Feb, 25:00) as a validation error. */
+const parseLocal = (local: string): string => {
+  try {
+    return localToUtc(local);
+  } catch {
+    throw new ApiError('validation', 'That date or time does not exist');
+  }
+};
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
 
 function findClient(ctx: ToolContext, id: string) {
@@ -372,7 +384,7 @@ const HANDLERS: Record<string, Handler> = {
   create_booking(a, ctx) {
     const u = findClient(ctx, a.client_id as string);
     if (!u) return fail('Client not found', 'not_found');
-    const startUtc = localToUtc(a.start as string);
+    const startUtc = parseLocal(a.start as string);
     const b = ctx.createBooking(u.id, startUtc, 'chatgpt', ctx.actor);
     return {
       ok: true,
@@ -400,7 +412,7 @@ const HANDLERS: Record<string, Handler> = {
     if (!b) return fail('Booking not found', 'not_found');
     if (b.status !== 'confirmed') return fail('Only confirmed bookings can be moved', 'conflict');
     if (Date.parse(b.start) <= ctx.now()) return fail('That booking is in the past', 'conflict');
-    const moved = ctx.rescheduleBooking(b.id, localToUtc(a.new_start as string));
+    const moved = ctx.rescheduleBooking(b.id, parseLocal(a.new_start as string));
     return { ok: true, result: bookingRow(moved), summary: `Moved ${clean(moved.clientName)} to ${toLocal(moved.start).replace('T', ' ')}` };
   },
 };

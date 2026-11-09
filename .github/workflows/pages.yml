@@ -29,6 +29,10 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci
       - run: npx vitest run
+      - name: Property-based fuzzing (fixed seed)
+        run: npm run test:fuzz
+        env:
+          FC_SEED: '20261109'
       - name: Build (demo mode)
         run: npm run build
         env:

@@ -63,7 +63,7 @@ final class Totp
     /** Matching time step within +-$window steps, or null. */
     public static function match(string $secretBase32, string $code, int $timestamp, int $window = 1): ?int
     {
-        if (!preg_match('/^\d{6}$/', $code)) {
+        if (!preg_match('/^\d{6}$/D', $code)) {
             return null;
         }
         $now = self::step($timestamp);

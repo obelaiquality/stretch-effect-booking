@@ -216,3 +216,34 @@ describe('access control', () => {
     expect((await runTool('get_schedule', {}, ctx)).error).toBe('forbidden');
   });
 });
+
+describe('regression: fuzz findings', () => {
+  it('rejects inherited property names such as __proto__ and constructor as unknown fields', async () => {
+    const { ctx } = makeCtx();
+    const s = TOOLS.find((t) => t.name === 'get_schedule')!.inputSchema;
+    for (const k of ['__proto__', 'constructor', 'toString', 'hasOwnProperty']) {
+      const args = JSON.parse(`{"${k}": "x"}`);
+      expect(validateArgs(s, args).join(), k).toMatch(/unknown field/);
+      const r = await runTool('get_schedule', args, ctx);
+      expect(r.ok).toBe(false);
+      expect(r.error).toBe('invalid_params');
+    }
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
+  it('does not treat an inherited name as a supplied required field', () => {
+    const s = TOOLS.find((t) => t.name === 'get_client')!.inputSchema;
+    const proto = { client_id: 'u_thandi' };
+    expect(validateArgs(s, Object.create(proto)).join()).toMatch(/"client_id" is required/);
+  });
+  it('create_booking and reschedule_booking reject dates that do not exist (30 Feb is not 2 Mar)', async () => {
+    const { ctx, st } = makeCtx();
+    const before = JSON.stringify(st);
+    const a = await runTool('create_booking', { client_id: 'u_pieter', start: '2026-02-30T09:00', idempotency_key: key('m') }, ctx);
+    expect(a.ok).toBe(false);
+    expect(a.error).toBe('validation');
+    const b = await runTool('reschedule_booking', { booking_id: 'b_1', new_start: '2026-11-31T09:00', idempotency_key: key('n') }, ctx);
+    expect(b.ok).toBe(false);
+    expect(b.error).toBe('validation');
+    expect(JSON.stringify(st)).toBe(before);
+  });
+});

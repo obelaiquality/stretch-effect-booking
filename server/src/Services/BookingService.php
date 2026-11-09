@@ -73,7 +73,8 @@ final class BookingService implements BookingServiceContract
                 $occupied[] = [Time::fromDb((string) $r['start_at'])->getTimestamp(), Time::fromDb((string) $r['end_at'])->getTimestamp()];
             }
         }
-        $sql = "SELECT id, start_at, end_at FROM bookings WHERE status = 'confirmed' AND start_at < ? AND end_at > ?";
+        // completed and no_show still occupy their time: the owner may mark a future session before it happens, and the slot must not reopen
+        $sql = "SELECT id, start_at, end_at FROM bookings WHERE status IN ('confirmed','completed','no_show') AND start_at < ? AND end_at > ?";
         $params = [Time::toDb(new DateTimeImmutable('@' . ($rangeEnd + $session + $buffer))), Time::toDb(new DateTimeImmutable('@' . ($rangeStart - $session - $buffer)))];
         foreach ($this->db->all($sql, $params) as $r) {
             if (($opts['excludeBookingId'] ?? null) === $r['id']) {
@@ -115,6 +116,9 @@ final class BookingService implements BookingServiceContract
 
     public function localToUtc(string $local): string
     {
+        if (str_contains($local, "\0")) { // createFromFormat() throws a ValueError on a NUL byte
+            throw new DomainError('validation', 'Time must look like 2026-11-09T09:30');
+        }
         $d = DateTimeImmutable::createFromFormat('!Y-m-d\TH:i', $local, Time::tz())
             ?: DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:s', $local, Time::tz());
         if ($d === false) {

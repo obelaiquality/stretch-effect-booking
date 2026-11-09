@@ -8,3 +8,7 @@ server/var/
 .DS_Store
 .env*
 .phpunit.cache/
+
+# Stryker
+web/reports/
+web/.stryker-tmp/

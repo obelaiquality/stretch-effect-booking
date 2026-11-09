@@ -55,7 +55,8 @@ final class ClientRegistry
             }
             if (str_starts_with($uri, $prefix)) {
                 $rest = substr($uri, strlen($prefix));
-                if (preg_match('/^[A-Za-z0-9._~-]{1,128}$/', $rest) === 1) {
+                // '.' and '..' match the character class but are dot segments, which browsers resolve away
+                if (preg_match('/^[A-Za-z0-9._~-]{1,128}$/D', $rest) === 1 && $rest !== '.' && $rest !== '..') {
                     return true;
                 }
             }
@@ -90,6 +91,17 @@ final class ClientRegistry
         return $n === '' ? 'Unnamed app' : $n;
     }
 
+    /** True when every element is one of the allowed strings (array_diff would warn on nested arrays). @param list<string> $allowed */
+    private static function allIn(array $values, array $allowed): bool
+    {
+        foreach ($values as $v) {
+            if (!is_string($v) || !in_array($v, $allowed, true)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // ---------------------------------------------------------------- DCR
 
     /**
@@ -104,11 +116,11 @@ final class ClientRegistry
             throw new \InvalidArgumentException('only public clients are supported (token_endpoint_auth_method none)');
         }
         $grants = $meta['grant_types'] ?? ['authorization_code', 'refresh_token'];
-        if (!is_array($grants) || array_diff($grants, ['authorization_code', 'refresh_token']) !== []) {
+        if (!is_array($grants) || !self::allIn($grants, ['authorization_code', 'refresh_token'])) {
             throw new \InvalidArgumentException('unsupported grant_types');
         }
         $resp = $meta['response_types'] ?? ['code'];
-        if (!is_array($resp) || array_diff($resp, ['code']) !== []) {
+        if (!is_array($resp) || !self::allIn($resp, ['code'])) {
             throw new \InvalidArgumentException('unsupported response_types');
         }
         $uris = $this->validateRedirects($meta['redirect_uris'] ?? null);

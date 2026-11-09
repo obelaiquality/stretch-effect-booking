@@ -77,7 +77,7 @@ function totpFor(windowIndex: number): string {
   let h = Math.imul(windowIndex ^ TOTP_SALT, 2654435761) >>> 0;
   h = Math.imul(h ^ (h >>> 15), 2246822519) >>> 0;
   h = Math.imul(h ^ (h >>> 13), 3266489917) >>> 0;
-  return String((h ^ (h >>> 16)) % 1_000_000).padStart(6, '0');
+  return String(((h ^ (h >>> 16)) >>> 0) % 1_000_000).padStart(6, '0'); // >>> 0: XOR yields a signed int32, which would print a minus sign
 }
 /** A 6-digit code that changes every 30 seconds, like an authenticator app. Demo only. */
 export function demoTotpCode(nowMs: number = Date.now()): string {

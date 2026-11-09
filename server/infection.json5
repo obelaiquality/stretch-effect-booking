@@ -1,0 +1,27 @@
+{
+    // Mutation testing for the security- and money-critical server code. See docs/TESTING.md.
+    //   php -d extension=pcov vendor/bin/infection --threads=4            (or: composer infection)
+    // Needs a coverage driver (pcov in CI). The fuzz suite is not run here: mutants are tested against the fast `server` suite.
+    "$schema": "vendor/infection/infection/resources/schema.json",
+    "source": {
+        "directories": ["src/OAuth", "src/Mcp", "src/Services", "src/Support"],
+        "excludes": [
+            // not security or money logic: HTML, network fetch, mail-free admin helpers, logging, settings JSON, cron
+            "OAuth/ConsentPage.php", "OAuth/HttpCimdFetcher.php",
+            "Services/AuditLog.php", "Services/ClientService.php", "Services/Maintenance.php", "Services/SettingsService.php",
+            "Support/Log.php", "Support/Presenter.php"
+        ]
+    },
+    "bootstrap": "tests/infection-bootstrap.php",
+    "phpUnit": { "configDir": "." },
+    "testFrameworkOptions": "--testsuite=server",
+    "tmpDir": "var/infection",
+    "logs": {
+        "text": "var/infection/infection.log",
+        "summary": "var/infection/summary.log",
+        "json": "var/infection/infection.json",
+        "perMutator": "var/infection/per-mutator.md"
+    },
+    "timeout": 20,
+    "mutators": { "@default": true }
+}
