@@ -13,5 +13,6 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    testTimeout: 120_000, // fuzz properties can run long with FC_RUNS overrides
   },
 });

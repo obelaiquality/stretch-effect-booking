@@ -73,7 +73,8 @@ final class BookingService implements BookingServiceContract
                 $occupied[] = [Time::fromDb((string) $r['start_at'])->getTimestamp(), Time::fromDb((string) $r['end_at'])->getTimestamp()];
             }
         }
-        $sql = "SELECT id, start_at, end_at FROM bookings WHERE status = 'confirmed' AND start_at < ? AND end_at > ?";
+        // completed and no_show still occupy their time: the owner may mark a future session before it happens, and the slot must not reopen
+        $sql = "SELECT id, start_at, end_at FROM bookings WHERE status IN ('confirmed','completed','no_show') AND start_at < ? AND end_at > ?";
         $params = [Time::toDb(new DateTimeImmutable('@' . ($rangeEnd + $session + $buffer))), Time::toDb(new DateTimeImmutable('@' . ($rangeStart - $session - $buffer)))];
         foreach ($this->db->all($sql, $params) as $r) {
             if (($opts['excludeBookingId'] ?? null) === $r['id']) {
@@ -115,9 +116,13 @@ final class BookingService implements BookingServiceContract
 
     public function localToUtc(string $local): string
     {
+        if (str_contains($local, "\0")) { // createFromFormat() throws a ValueError on a NUL byte
+            throw new DomainError('validation', 'Time must look like 2026-11-09T09:30');
+        }
         $d = DateTimeImmutable::createFromFormat('!Y-m-d\TH:i', $local, Time::tz())
             ?: DateTimeImmutable::createFromFormat('!Y-m-d\TH:i:s', $local, Time::tz());
-        if ($d === false) {
+        // createFromFormat() rolls impossible dates over (2026-13-10 becomes 2027-01-10): only accept what round-trips
+        if ($d === false || $d->format(strlen($local) === 16 ? 'Y-m-d\TH:i' : 'Y-m-d\TH:i:s') !== $local) {
             throw new DomainError('validation', 'Time must look like 2026-11-09T09:30');
         }
         return Time::iso($d);
@@ -190,8 +195,8 @@ final class BookingService implements BookingServiceContract
     private function lock(): void
     {
         if ($this->db->driver() === 'mysql') {
-            // One global lock row serialises booking writes (single practitioner).
-            $this->db->run("INSERT IGNORE INTO settings (k, v, updated_at) VALUES ('lock', '{}', ?)", [Time::toDb($this->db->now())]);
+            // One global lock row serialises booking writes (single practitioner). The row is seeded by migration 003: an
+            // INSERT IGNORE here raced with other transactions' FOR UPDATE and could deadlock.
             $this->db->val("SELECT k FROM settings WHERE k = 'lock' FOR UPDATE");
         }
         // SQLite: Db::transaction() already used BEGIN IMMEDIATE.
@@ -384,14 +389,18 @@ final class BookingService implements BookingServiceContract
         if (!in_array($status, ['completed', 'no_show'], true)) {
             throw new DomainError('validation', 'status must be completed or no_show');
         }
-        $row = $this->db->one(self::BOOKING_SELECT . ' WHERE b.id = ?', [$bookingId]);
-        if ($row === null) {
-            throw new DomainError('not_found', 'Booking not found');
-        }
-        if ($row['status'] === 'cancelled') {
-            throw new DomainError('conflict', 'A cancelled booking cannot be marked ' . $status);
-        }
-        $this->db->run('UPDATE bookings SET status = ? WHERE id = ?', [$status, $bookingId]);
+        $row = $this->db->transaction(function () use ($bookingId, $status): array {
+            $this->lock();
+            $row = $this->db->one(self::BOOKING_SELECT . ' WHERE b.id = ?' . $this->db->forUpdate(), [$bookingId]);
+            if ($row === null) {
+                throw new DomainError('not_found', 'Booking not found');
+            }
+            if ($row['status'] === 'cancelled') {
+                throw new DomainError('conflict', 'A cancelled booking cannot be marked ' . $status);
+            }
+            $this->db->run('UPDATE bookings SET status = ? WHERE id = ?', [$status, $bookingId]);
+            return $row;
+        });
         $this->audit->write(null, $actor, 'booking.status', ['bookingId' => $bookingId, 'status' => $status], 'ok', 'Booking marked ' . $status, null);
         $row['status'] = $status;
         return Presenter::booking($row);

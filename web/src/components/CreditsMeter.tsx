@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import './components.css';
 
-interface Props { value: number; label?: string }
+interface Props { value: number; label?: string; pending?: number }
 
 const reduced = () => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
-/** Big count of sessions left with a thin segmented bar. Counts up once. */
-export default function CreditsMeter({ value, label = 'sessions left' }: Props) {
+/** Big count of sessions left, with a label under it. Counts up once. */
+export default function CreditsMeter({ value, label = 'Sessions left', pending = 0 }: Props) {
   const [shown, setShown] = useState(reduced() ? value : 0);
   const [played, setPlayed] = useState(false);
 
@@ -29,19 +29,11 @@ export default function CreditsMeter({ value, label = 'sessions left' }: Props) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value]);
 
-  const segs = Math.max(5, Math.min(12, value));
-  const filled = Math.min(value, segs);
   return (
-    <div className="tse-meter" role="img" aria-label={`${value} ${label}`}>
-      <div className="tse-meter-num display">{shown}</div>
-      <div className="tse-meter-side">
-        <div className="eyebrow">{label}</div>
-        <div className="tse-meter-bar" aria-hidden="true">
-          {Array.from({ length: segs }, (_, i) => (
-            <span key={i} className={i < filled ? 'on' : ''} />
-          ))}
-        </div>
-      </div>
+    <div className="tse-meter" role="img" aria-label={`${value} ${label.toLowerCase()}${pending ? `, ${pending} pack waiting for payment` : ''}`}>
+      <div className="figure tse-meter-num">{shown}</div>
+      <div className="label">{label}</div>
+      {pending > 0 && <div className="small muted">{pending} pack{pending === 1 ? '' : 's'} waiting for payment</div>}
     </div>
   );
 }

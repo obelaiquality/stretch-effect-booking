@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api } from '../data/api';
 import { qualifiesForRefund } from '../domain/credits';
-import { formatLocalDateTime } from '../domain/slots';
+import { formatDayTime } from '../lib/format';
 import { ApiError, type Booking } from '../domain/types';
 import Modal from './Modal';
 import { useToast } from './Toast';
@@ -41,11 +41,11 @@ export default function CancelBookingModal({ booking, cancelFreeHours, onClose, 
       footer={
         <>
           <button className="btn btn-ghost" type="button" onClick={onClose} disabled={busy} data-autofocus>Keep booking</button>
-          <button className="btn btn-red" type="button" onClick={go} disabled={busy}>{busy ? 'Cancelling' : 'Cancel session'}</button>
+          <button className="btn btn-danger" type="button" onClick={go} disabled={busy}>{busy ? 'Cancelling' : 'Cancel session'}</button>
         </>
       }
     >
-      <p className="h3 num">{formatLocalDateTime(booking.start)}</p>
+      <p className="h3 num">{formatDayTime(booking.start)}</p>
       {refund ? (
         <p className="silver">This is more than {cancelFreeHours} hours away, so your session goes back on your balance.</p>
       ) : (

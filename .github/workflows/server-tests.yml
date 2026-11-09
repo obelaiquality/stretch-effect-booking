@@ -4,12 +4,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: '17 3 * * 1'   # Mondays 03:17 UTC: fuzz with a fresh random seed
 
 permissions:
   contents: read
 
 jobs:
   phpunit:
+    if: github.event_name != 'schedule'   # the weekly schedule is only for the fuzz job
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -18,11 +21,60 @@ jobs:
       run:
         working-directory: server
     steps:
-      - uses: actions/checkout@v4
-      - uses: shivammathur/setup-php@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
         with:
           php-version: ${{ matrix.php }}
           extensions: pdo_sqlite, sodium, curl, mbstring
           coverage: none
+      # Infection (a dev dependency) needs PHP 8.3+ and its Symfony packages 8.4+; PHPUnit and the app need only 8.2.
+      - run: composer install --no-interaction --no-progress --ignore-platform-req=php
+      - run: vendor/bin/phpunit --testsuite=server
+
+  # Seeded fuzzing of /mcp, /oauth, /api and the pure functions (tests/Fuzz). Fixed seed so a red run can be replayed:
+  #   FUZZ_SEED=20261109 FUZZ_ITERATIONS=400 vendor/bin/phpunit --testsuite=fuzz
+  # A scheduled run uses a fresh random seed every week (the seed is printed in the log and in every failure message).
+  fuzz:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
+        with:
+          php-version: '8.4'
+          extensions: pdo_sqlite, sodium, curl, mbstring
+          coverage: none
       - run: composer install --no-interaction --no-progress
-      - run: vendor/bin/phpunit
+      - name: Fuzz suite
+        env:
+          FUZZ_SEED: ${{ github.event_name == 'schedule' && '' || '20261109' }}
+          FUZZ_ITERATIONS: ${{ github.event_name == 'schedule' && '2000' || '400' }}
+        run: vendor/bin/phpunit --testsuite=fuzz
+
+  # Mutation testing of the OAuth, MCP, auth, credit, booking, payment-reference, grant and rate-limit code.
+  # The thresholds below are about 3 points under the score reached when this was set up (MSI 88.8 %, covered MSI 89.7 %, see
+  # docs/TESTING.md); raise them as the score rises. pcov (coverage: pcov) gives Infection its coverage map, no php.ini change needed.
+  mutation:
+    if: github.event_name != 'schedule'   # the weekly schedule is only for the fuzz job
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: server
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # v2.40.0
+        with:
+          php-version: '8.4'
+          extensions: pdo_sqlite, sodium, curl, mbstring
+          coverage: pcov
+      - run: composer install --no-interaction --no-progress
+      - name: Infection
+        run: php -d memory_limit=2G vendor/bin/infection --threads=4 --no-progress --with-uncovered --only-covering-test-cases --min-msi=85 --min-covered-msi=86
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: infection-report
+          path: server/var/infection/
+          retention-days: 14

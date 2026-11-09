@@ -62,6 +62,7 @@ const READ = { readOnlyHint: true, destructiveHint: false, openWorldHint: false 
 const WRITE = { readOnlyHint: false, destructiveHint: false, openWorldHint: false } as const;
 const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true, openWorldHint: false } as const;
 
+// Stryker disable StringLiteral: tool titles and descriptions are prose shown to ChatGPT, not behaviour.
 export const TOOLS: ToolDef[] = [
   {
     name: 'get_schedule',
@@ -121,7 +122,7 @@ export const TOOLS: ToolDef[] = [
         client_id: p.clientId,
         sessions: p.sessions,
         reason: p.reason,
-        payment_reference: { type: 'string', description: 'Bank or EFT reference, if known.', maxLength: 60 },
+        payment_reference: { type: 'string', description: 'Bank or EFT reference, if known: 3 to 60 characters, letters, digits, spaces and . _ / # - only.', minLength: 3, maxLength: 60 },
         idempotency_key: p.idem,
       },
       ['client_id', 'sessions', 'reason', 'idempotency_key'],
@@ -168,16 +169,19 @@ export const TOOLS: ToolDef[] = [
     annotations: WRITE, scope: 'bookings:write', write: true,
   },
 ];
+// Stryker restore StringLiteral
 
 // ---------------------------------------------------------------- validation
 export function validateArgs(schema: JsonSchema, args: unknown): string[] {
   const errs: string[] = [];
   if (args === null || typeof args !== 'object' || Array.isArray(args)) return ['arguments must be an object'];
   const a = args as Record<string, unknown>;
-  for (const k of Object.keys(a)) if (!(k in schema.properties)) errs.push(`unknown field "${k}"`);
-  for (const k of schema.required) if (a[k] === undefined || a[k] === null) errs.push(`"${k}" is required`);
+  // hasOwn, not `in`: "__proto__", "constructor", "toString" exist on every object and must not count as known fields.
+  const own = (k: string) => (Object.hasOwn(a, k) ? a[k] : undefined);
+  for (const k of Object.keys(a)) if (!Object.hasOwn(schema.properties, k)) errs.push(`unknown field "${k}"`);
+  for (const k of schema.required) if (own(k) === undefined || own(k) === null) errs.push(`"${k}" is required`);
   for (const [k, def] of Object.entries(schema.properties)) {
-    const v = a[k];
+    const v = own(k);
     if (v === undefined) continue;
     if (def.type === 'string') {
       if (typeof v !== 'string') { errs.push(`"${k}" must be a string`); continue; }
@@ -195,10 +199,28 @@ export function validateArgs(schema: JsonSchema, args: unknown): string[] {
 }
 
 // ---------------------------------------------------------------- helpers
+/**
+ * Payment reference rule shared with the server (PaymentReferences::canonical): remove format characters (zero-width, soft
+ * hyphen, BOM), fold with NFKC, trim and collapse spaces, then accept only ASCII `[A-Za-z0-9 ._/#-]{3,60}`.
+ * Returns the upper-cased reference, undefined when nothing was supplied, or null when the text is not allowed.
+ */
+export function canonicalPaymentReference(raw: string): string | undefined | null {
+  const r = raw.replace(/\p{Cf}+/gu, '').normalize('NFKC').replace(/\p{Cf}+/gu, '').replace(/ {2,}/g, ' ').trim();
+  if (r === '') return undefined;
+  return /^[A-Za-z0-9 ._/#-]{3,60}$/.test(r) ? r.toUpperCase() : null;
+}
 const fail = (summary: string, error: string): McpCallResult => ({ ok: false, summary, error });
 const clean = (s: string) => s.replace(/[\u0000-\u001f\u007f]/g, ' ').slice(0, 60);
 /** UTC ISO -> local "YYYY-MM-DDTHH:MM" */
 const toLocal = (isoUtc: string) => `${localDayKey(isoUtc)}T${formatLocalTime(isoUtc)}`;
+/** localToUtc that reports impossible dates (30 Feb, 25:00) as a validation error. */
+const parseLocal = (local: string): string => {
+  try {
+    return localToUtc(local);
+  } catch {
+    throw new ApiError('validation', 'That date or time does not exist');
+  }
+};
 const daysBetween = (a: string, b: string) => Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000);
 
 function findClient(ctx: ToolContext, id: string) {
@@ -298,7 +320,7 @@ const HANDLERS: Record<string, Handler> = {
       result: {
         client_id: u.id,
         name: clean(u.name),
-        email: u.email,
+        untrusted_email: u.email,
         sessions_left: sum?.balance ?? ctx.balance(u.id),
         upcoming_bookings: upcoming,
         last_visit: sum?.lastVisit ? toLocal(sum.lastVisit) : null,
@@ -335,7 +357,10 @@ const HANDLERS: Record<string, Handler> = {
     if (!u) return fail('Client not found', 'not_found');
     const n = a.sessions as number;
     if (usedToday(ctx) + n > DAILY_CREDIT_CAP) return fail(`Daily limit reached: ChatGPT can change at most ${DAILY_CREDIT_CAP} sessions a day. Use the admin screen for more.`, 'daily_cap');
-    const ref = (a.payment_reference as string | undefined)?.trim() || undefined;
+    // Same rule as the server: invisible characters removed, NFKC, then ASCII `[A-Za-z0-9 ._/#-]{3,60}` only.
+    const rawRef = a.payment_reference as string | undefined;
+    const ref = rawRef === undefined ? undefined : canonicalPaymentReference(rawRef);
+    if (ref === null) return fail('The payment reference must be 3 to 60 characters: letters, digits, spaces and . _ / # - only.', 'invalid_params');
     const note = `${a.reason as string}${ref ? ` (ref ${ref})` : ''}`;
     // A matching pack request waiting for payment gets settled, so the owner's pending list stays right.
     const pending = ctx.getState().packRequests.find((r) => r.userId === u.id && r.status === 'pending' && r.sessions === n);
@@ -372,7 +397,7 @@ const HANDLERS: Record<string, Handler> = {
   create_booking(a, ctx) {
     const u = findClient(ctx, a.client_id as string);
     if (!u) return fail('Client not found', 'not_found');
-    const startUtc = localToUtc(a.start as string);
+    const startUtc = parseLocal(a.start as string);
     const b = ctx.createBooking(u.id, startUtc, 'chatgpt', ctx.actor);
     return {
       ok: true,
@@ -400,7 +425,7 @@ const HANDLERS: Record<string, Handler> = {
     if (!b) return fail('Booking not found', 'not_found');
     if (b.status !== 'confirmed') return fail('Only confirmed bookings can be moved', 'conflict');
     if (Date.parse(b.start) <= ctx.now()) return fail('That booking is in the past', 'conflict');
-    const moved = ctx.rescheduleBooking(b.id, localToUtc(a.new_start as string));
+    const moved = ctx.rescheduleBooking(b.id, parseLocal(a.new_start as string));
     return { ok: true, result: bookingRow(moved), summary: `Moved ${clean(moved.clientName)} to ${toLocal(moved.start).replace('T', ' ')}` };
   },
 };

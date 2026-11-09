@@ -1,34 +1,9 @@
-// Local formatting helpers for the admin pages. All display in Africa/Johannesburg (UTC+2, no DST).
+// Day-key and range helpers for the admin pages. Display formatting lives in lib/format.ts.
+// All keys are local days (Africa/Johannesburg, UTC+2, no DST).
 import type { Booking, BusyBlock } from '../../domain/types';
+import { formatDay } from '../../lib/format';
 
-const TZ = 'Africa/Johannesburg';
 const OFFSET_MS = 2 * 3600 * 1000;
-
-export const rand = (n: number) => 'R' + Math.round(n).toLocaleString('en-ZA').replace(/\s/g, ',');
-
-const dtf = (o: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat('en-ZA', { timeZone: TZ, ...o });
-const parts = (iso: string, o: Intl.DateTimeFormatOptions) => {
-  const m: Record<string, string> = {};
-  for (const p of dtf(o).formatToParts(new Date(iso))) m[p.type] = p.value;
-  return m;
-};
-
-export function fmtTime(iso: string): string {
-  const p = parts(iso, { hour: '2-digit', minute: '2-digit', hour12: false });
-  return `${p.hour === '24' ? '00' : p.hour}:${p.minute}`;
-}
-export function fmtDay(iso: string): string {
-  const p = parts(iso, { weekday: 'short', day: 'numeric', month: 'short' });
-  return `${p.weekday} ${p.day} ${p.month}`;
-}
-/** "Tue 11 Nov · 07:30" */
-export function fmtWhen(iso: string): string {
-  return `${fmtDay(iso)} · ${fmtTime(iso)}`;
-}
-export function fmtDate(iso: string): string {
-  const p = parts(iso, { day: 'numeric', month: 'short', year: 'numeric' });
-  return `${p.day} ${p.month} ${p.year}`;
-}
 
 /** Local day key YYYY-MM-DD for an instant. */
 export function dayKey(d: Date | string): string {
@@ -66,7 +41,7 @@ export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday',
 export const WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 export const dayLabel = (key: string) => {
   const [y, m, d] = key.split('-').map(Number);
-  return fmtDay(new Date(Date.UTC(y, m - 1, d, 10)).toISOString());
+  return formatDay(new Date(Date.UTC(y, m - 1, d, 10)).toISOString());
 };
 
 export function actorLabel(actor: string, clientId: string): string {

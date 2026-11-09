@@ -3,6 +3,7 @@ import { HashRouter, Route, Routes } from 'react-router-dom';
 import { SessionProvider, RequireRole } from './data/session';
 import Shell from './components/Shell';
 import Landing from './pages/Landing';
+import { PageSkeleton } from './components/Skeleton';
 
 // Agent-owned pages (see docs/BUILD-SPEC.md section 7). Each file has a default export.
 const Login = lazy(() => import('./pages/auth/Login'));
@@ -18,7 +19,7 @@ const AdminCalendar = lazy(() => import('./pages/admin/AdminCalendar'));
 const AdminConnector = lazy(() => import('./pages/admin/AdminConnector'));
 const GoLive = lazy(() => import('./pages/GoLive'));
 
-const Loading = () => <div className="wrap" style={{ padding: '96px 16px' }} aria-busy="true" />;
+const Loading = () => <PageSkeleton />;
 
 export default function App() {
   return (

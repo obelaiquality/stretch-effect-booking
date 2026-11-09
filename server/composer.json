@@ -10,16 +10,29 @@
     "ext-curl": "*"
   },
   "require-dev": {
+    "infection/infection": "^0.35.10",
     "phpunit/phpunit": "^11.5"
   },
   "autoload": {
-    "psr-4": { "StretchEffect\\": "src/" }
+    "psr-4": {
+      "StretchEffect\\": "src/"
+    }
   },
   "autoload-dev": {
-    "psr-4": { "StretchEffect\\Tests\\": "tests/" }
+    "psr-4": {
+      "StretchEffect\\Tests\\": "tests/"
+    }
   },
   "scripts": {
-    "test": "phpunit"
+    "test": "phpunit --testsuite=server",
+    "fuzz": "phpunit --testsuite=fuzz",
+    "mutation": "infection --threads=4 --with-uncovered --only-covering-test-cases --no-progress"
   },
-  "config": { "sort-packages": true }
+  "config": {
+    "sort-packages": true,
+    "platform-check": false,
+    "allow-plugins": {
+      "infection/extension-installer": true
+    }
+  }
 }

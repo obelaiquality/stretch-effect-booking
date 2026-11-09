@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { api } from './api';
+import { PageSkeleton } from '../components/Skeleton';
 import type { Role, User } from '../domain/types';
 
 interface SessionValue {
@@ -50,7 +51,7 @@ export function useSession(): SessionValue {
 export function RequireRole({ role, children }: { role: Role; children: ReactNode }) {
   const { user, loading } = useSession();
   const loc = useLocation();
-  if (loading) return <div className="wrap" style={{ padding: '96px 16px' }} aria-busy="true" />;
+  if (loading) return <PageSkeleton />;
   if (!user) return <Navigate to={`/login?next=${encodeURIComponent(loc.pathname)}`} replace />;
   if (user.role !== role) return <Navigate to={user.role === 'owner' ? '/admin' : '/app'} replace />;
   return <>{children}</>;

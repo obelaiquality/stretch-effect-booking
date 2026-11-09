@@ -11,7 +11,7 @@ import {
 import { balanceOf, qualifiesForRefund } from '../domain/credits';
 import { addDays, computeSlots, isSlotFree, localDayKey, localDayKeyMs } from '../domain/slots';
 import { buildSeed, type DemoState, type StoredUser } from './seed';
-import { runTool } from '../domain/mcpTools';
+import { canonicalPaymentReference, runTool } from '../domain/mcpTools';
 
 let pendingOwner: string | null = null;
 const STORE_KEY = 'tse-demo-v1';
@@ -77,7 +77,7 @@ function totpFor(windowIndex: number): string {
   let h = Math.imul(windowIndex ^ TOTP_SALT, 2654435761) >>> 0;
   h = Math.imul(h ^ (h >>> 15), 2246822519) >>> 0;
   h = Math.imul(h ^ (h >>> 13), 3266489917) >>> 0;
-  return String((h ^ (h >>> 16)) % 1_000_000).padStart(6, '0');
+  return String(((h ^ (h >>> 16)) >>> 0) % 1_000_000).padStart(6, '0'); // >>> 0: XOR yields a signed int32, which would print a minus sign
 }
 /** A 6-digit code that changes every 30 seconds, like an authenticator app. Demo only. */
 export function demoTotpCode(nowMs: number = Date.now()): string {
@@ -447,7 +447,9 @@ export const demoApi: Api = {
   },
   async adminMarkPackPaid(packRequestId, paymentReference) {
     const o = requireOwner();
-    return markPackPaid(packRequestId, paymentReference?.trim() || undefined, o.id);
+    const ref = paymentReference === undefined ? undefined : canonicalPaymentReference(paymentReference);
+    if (ref === null) throw new ApiError('validation', 'The payment reference must be 3 to 60 characters: letters, digits, spaces and . _ / # - only.');
+    return markPackPaid(packRequestId, ref, o.id);
   },
   async adminBookFor(userId, slotStart) {
     const o = requireOwner();

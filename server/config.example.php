@@ -44,7 +44,7 @@ return [
         'cimd_hosts' => ['chatgpt.com', 'openai.com'],
     ],
     'cron' => [
-        // Long random string. Used by POST /api/cron/sync (header X-Cron-Token). CLI cron (bin/cron.php) needs no token.
+        // At least 32 random characters (a shorter token, or one containing CHANGE_ME, switches the HTTP endpoint off with 503). Used by POST /api/cron/sync (header X-Cron-Token). CLI cron (bin/cron.php) needs no token.
         'token' => 'CHANGE_ME_LONG_RANDOM',
     ],
 ];

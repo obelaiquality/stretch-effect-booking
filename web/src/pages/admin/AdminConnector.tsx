@@ -2,9 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type McpCallResult } from '../../data/api';
 import { TOOLS, type ToolDef } from '../../domain/mcpTools';
 import type { AuditEntry, ConnectorGrant } from '../../domain/types';
+import Icon from '../../components/Icon';
+import { formatDayTime } from '../../lib/format';
 import './admin.css';
-import { AdminFrame, AdminHead, errText, Modal, useLoad, useToast } from './ui';
-import { addDaysKey, dayLabel, fmtWhen, todayKey, weekdayOf } from './format';
+import { AdminFrame, AdminHead, CardSkel, ErrorState, Modal, errText, useLoad, useToast } from './ui';
+import { addDaysKey, dayLabel, todayKey, weekdayOf } from './format';
 
 const SCOPE_LABEL: Record<string, string> = {
   'bookings:read': 'See the diary',
@@ -284,40 +286,40 @@ export default function AdminConnector() {
   }
 
   const list = grants.data ?? [];
+  const awaiting = msgs.some((m) => m.kind === 'tool' && m.state === 'awaiting');
   const active = list.filter((g) => !g.revokedAt);
 
   return (
     <AdminFrame>
-      <AdminHead eyebrow="ChatGPT connector" title={<>Run the studio from <span className="red">ChatGPT</span></>} />
-      <p className="lede silver">
+      <AdminHead title="ChatGPT" />
+      <p className="lede silver measure">
         Connect your own ChatGPT to the studio. Ask in plain words who is booked, find a free slot, load a pack someone has paid for or cancel a booking. ChatGPT asks you to confirm before it cancels a booking or removes sessions. Every call is written to the log below, and you can cut the connection at any time.
       </p>
 
       <div className="admin-grid">
         {/* (a) status */}
-        <section className="card card-red-top span-3" aria-labelledby="h-status">
+        <section className="card span-3" aria-labelledby="h-status">
           <h2 className="a-h" id="h-status">Connection status</h2>
-          {grants.error && <p className="error-text">{grants.error}</p>}
-          {grants.data && list.length === 0 && <p className="muted">Nothing is connected yet. Follow the steps further down.</p>}
+          {grants.error && <ErrorState message={grants.error} onRetry={grants.reload} />}
+          {!grants.data && !grants.error && <CardSkel lines={3} />}
+          {grants.data && list.length === 0 && <p className="muted measure">Nothing is connected yet. Follow the steps further down.</p>}
           <ul className="a-list">
             {list.map((g) => (
               <li key={g.id} className="a-li wrap-li grant">
                 <div>
                   <div className="row" style={{ gap: 8 }}>
                     <strong>{g.clientName}</strong>
-                    <span className={'badge ' + (g.revokedAt ? 'badge-red' : 'badge-ok')}>{g.revokedAt ? 'Revoked' : 'Connected'}</span>
+                    <span className={'badge ' + (g.revokedAt ? '' : 'badge-ok')}>{g.revokedAt ? 'Revoked' : 'Connected'}</span>
                   </div>
-                  <div className="chips" style={{ margin: '8px 0' }}>
-                    {g.scopes.map((s) => (
-                      <span key={s} className="badge" title={s}>{SCOPE_LABEL[s] ?? s}</span>
-                    ))}
-                  </div>
+                  <p className="small silver" style={{ margin: '8px 0' }}>
+                    Can: {g.scopes.map((s) => SCOPE_LABEL[s] ?? s).join(', ')}
+                  </p>
                   <div className="muted small num">
-                    Connected {fmtWhen(g.createdAt)} · {g.revokedAt ? `revoked ${fmtWhen(g.revokedAt)}` : g.lastUsedAt ? `last used ${fmtWhen(g.lastUsedAt)}` : 'never used'}
+                    Connected {formatDayTime(g.createdAt)} · {g.revokedAt ? `revoked ${formatDayTime(g.revokedAt)}` : g.lastUsedAt ? `last used ${formatDayTime(g.lastUsedAt)}` : 'never used'}
                   </div>
                 </div>
                 {!g.revokedAt && (
-                  <button className="btn btn-ghost btn-sm" onClick={() => setRevoking(g)}>Revoke</button>
+                  <button className="btn btn-danger btn-sm" onClick={() => setRevoking(g)}>Revoke</button>
                 )}
               </li>
             ))}
@@ -325,21 +327,24 @@ export default function AdminConnector() {
           <div className="pairing">
             <div>
               <strong>New connection</strong>
-              <p className="small muted" style={{ margin: '4px 0 0' }}>
+              <p className="small muted measure" style={{ margin: '4px 0 0' }}>
                 {pairing.data?.open
-                  ? `Open until ${fmtWhen(pairing.data.until!)}. Add the connector in ChatGPT now and sign in. The window closes after one connection.`
+                  ? `Open until ${formatDayTime(pairing.data.until!)}. Add the connector in ChatGPT now and sign in. The window closes after one connection.`
                   : 'Closed. A new ChatGPT can only connect within 15 minutes after you open this. This stops look-alike sign-in links.'}
               </p>
             </div>
             {pairing.data?.open ? (
               <button className="btn btn-ghost btn-sm" onClick={() => void togglePairing(false)}>Close</button>
             ) : (
-              <button className="btn btn-red btn-sm" onClick={() => void togglePairing(true)}>Allow a new connection</button>
+              <button className={'btn btn-sm ' + (awaiting ? 'btn-ghost' : 'btn-red')} onClick={() => void togglePairing(true)}>Allow a new connection</button>
             )}
           </div>
-          <p className="small silver kill">
-            <strong>Kill switch.</strong> Revoke ends access straight away. The next request from that connection is refused, and its tokens stop working. You can connect again later with your password and 2FA.
-          </p>
+          <div className="kill">
+            <Icon name="shield" size={22} />
+            <p className="small silver measure">
+              <strong className="white">Kill switch.</strong> Revoke ends access straight away. The next request from that connection is refused, and its tokens stop working. You can connect again later with your password and 2FA.
+            </p>
+          </div>
           {demo && active.length === 0 && list.length > 0 && (
             <button className="btn btn-quiet btn-sm" onClick={() => setResetting(true)}>Reset the demo to try again</button>
           )}
@@ -348,15 +353,14 @@ export default function AdminConnector() {
         {/* (b) simulation */}
         {demo ? (
           <section className="card span-3" aria-labelledby="h-sim">
-            <div className="eyebrow">Simulation</div>
             <h2 className="a-h" id="h-sim">Your ChatGPT (simulation)</h2>
-            <p className="small muted">A scripted preview of what the real thing will feel like. Each prompt runs the same tools the live connector offers, on the demo data.</p>
-            <div className="chips prompt-chips" role="group" aria-label="Example prompts">
+            <p className="small muted measure">A scripted preview of what the real thing will feel like. Each prompt runs the same tools the live connector offers, on the demo data.</p>
+            <div className="prompt-row" role="group" aria-label="Example prompts">
               {CHIPS.map((c) => (
-                <button key={c.label} className="chip" disabled={running} onClick={() => runChip(c)}>{c.label}</button>
+                <button key={c.label} className="chip prompt-chip" disabled={running} onClick={() => runChip(c)}>{c.label}</button>
               ))}
             </div>
-            <div className="chat" role="log" aria-live="polite" aria-label="Simulated conversation">
+            <div className={'chat' + (msgs.length === 0 ? ' chat-short' : '')} role="log" aria-live="polite" aria-label="Simulated conversation">
               {msgs.length === 0 && <p className="muted small chat-empty">Pick a prompt above to start.</p>}
               {msgs.map((m) =>
                 m.kind === 'user' ? (
@@ -368,15 +372,16 @@ export default function AdminConnector() {
                 ) : (
                   <div key={m.id} className={'toolblock' + (m.destructive ? ' destructive' : '')}>
                     <div className="tb-head">
-                      <span className="tb-name">{m.state === 'running' ? 'Running ' : 'Used '}{m.tool}</span>
-                      {m.write && <span className={'badge ' + (m.destructive ? 'badge-red' : 'badge-warn')}>{m.destructive ? 'Changes data, destructive' : 'Changes data'}</span>}
+                      <span className="tb-verb">{m.state === 'running' ? 'Running' : 'Used'}</span>
+                      <code className="tb-name mono">{m.tool}</code>
+                      {m.write && <span className={'tb-flag small' + (m.destructive ? ' text-error' : ' muted')}>{m.destructive ? 'Changes data, destructive' : 'Changes data'}</span>}
                     </div>
                     <pre className="code">{pretty(m.args)}</pre>
                     {m.state === 'awaiting' && (
                       <div className="approval" role="group" aria-label={`Approve ${m.tool}`}>
-                        <p className="small"><strong>ChatGPT wants to run {m.tool}.</strong> Nothing happens until you allow it.</p>
+                        <p className="small"><strong>ChatGPT wants to run <code className="mono">{m.tool}</code>.</strong> Nothing happens until you allow it.</p>
                         <div className="row">
-                          <button className={'btn btn-sm ' + (m.destructive ? 'btn-red' : 'btn-ghost')} onClick={() => decide(m.id, true)}>Allow</button>
+                          <button className="btn btn-sm btn-red" onClick={() => decide(m.id, true)}>Allow</button>
                           <button className="btn btn-sm btn-ghost" onClick={() => decide(m.id, false)}>Deny</button>
                         </div>
                       </div>
@@ -384,7 +389,7 @@ export default function AdminConnector() {
                     {m.state === 'denied' && <p className="small muted">Denied. Nothing was changed.</p>}
                     {m.state === 'done' && m.res && (
                       <>
-                        <div className="tb-sub eyebrow">{m.res.ok ? 'Result' : 'Error'}</div>
+                        <div className="tb-sub label">{m.res.ok ? 'Result' : 'Error'}</div>
                         <pre className={'code' + (m.res.ok ? '' : ' code-bad')}>{pretty(m.res)}</pre>
                       </>
                     )}
@@ -398,7 +403,7 @@ export default function AdminConnector() {
         ) : (
           <section className="card span-3">
             <h2 className="a-h">Simulation</h2>
-            <p className="muted small">The scripted ChatGPT preview only runs in the demo. On the live site, use your real ChatGPT.</p>
+            <p className="muted small measure">The scripted ChatGPT preview only runs in the demo. On the live site, use your real ChatGPT.</p>
           </section>
         )}
 
@@ -406,12 +411,12 @@ export default function AdminConnector() {
         {demo && (
           <section className="card span-3" aria-labelledby="h-con">
             <h2 className="a-h" id="h-con">Tool console</h2>
-            <p className="small muted">For power users. Pick a tool, edit the arguments and run it exactly as the connector would. Changes made here apply immediately, without the approval step.</p>
+            <p className="small muted measure">For power users. Pick a tool, edit the arguments and run it exactly as the connector would. Changes made here apply immediately, without the approval step.</p>
             <div className="console">
               <div className="stack">
                 <div className="field">
                   <label htmlFor="tool">Tool</label>
-                  <select id="tool" className="select" value={toolName} onChange={(e) => {
+                  <select id="tool" className="select mono" value={toolName} onChange={(e) => {
                     setToolName(e.target.value);
                     setArgText(sampleArgs(TOOLS.find((t) => t.name === e.target.value)!));
                     setConsoleOut(null);
@@ -419,19 +424,19 @@ export default function AdminConnector() {
                     {TOOLS.map((t) => <option key={t.name} value={t.name}>{t.name}{t.write ? ' (changes data)' : ''}</option>)}
                   </select>
                 </div>
-                <p className="small silver">{tool.description}</p>
-                <p className="tiny muted">Needs the "{tool.scope}" permission. Required: {tool.inputSchema.required.join(', ') || 'nothing'}.</p>
+                <p className="small silver measure">{tool.description}</p>
+                <p className="tiny muted measure">Needs the <code className="mono">{tool.scope}</code> permission. Required: {tool.inputSchema.required.length ? tool.inputSchema.required.map((r, i) => <span key={r}>{i > 0 ? ', ' : ''}<code className="mono">{r}</code></span>) : 'nothing'}.</p>
                 <div className="field">
                   <label htmlFor="args">Arguments (JSON)</label>
                   <textarea id="args" className="textarea mono" rows={9} spellCheck={false} value={argText} onChange={(e) => setArgText(e.target.value)} />
                 </div>
                 <div className="row">
-                  <button className="btn btn-red" disabled={consoleBusy} onClick={runConsole}>Run tool</button>
+                  <button className="btn btn-ghost" disabled={consoleBusy} onClick={runConsole}>Run tool</button>
                   <button className="btn btn-quiet" onClick={() => setArgText(sampleArgs(tool))}>Reset arguments</button>
                 </div>
               </div>
               <div>
-                <div className="eyebrow">Result</div>
+                <div className="label">Result</div>
                 <pre className="code console-out" aria-live="polite">{consoleOut ?? 'Run a tool to see the result.'}</pre>
               </div>
             </div>
@@ -441,8 +446,9 @@ export default function AdminConnector() {
         {/* (d) audit */}
         <section className="card span-3" aria-labelledby="h-aud">
           <h2 className="a-h" id="h-aud">Audit log</h2>
-          {audit.error && <p className="error-text">{audit.error}</p>}
-          {audit.data && audit.data.length === 0 && <p className="muted">No calls yet.</p>}
+          {audit.error && <ErrorState message={audit.error} onRetry={audit.reload} />}
+          {!audit.data && !audit.error && <CardSkel lines={4} />}
+          {audit.data && audit.data.length === 0 && <p className="muted measure">No calls yet. Run a prompt in the simulation to see it logged here.</p>}
           {audit.data && audit.data.length > 0 && (
             <div className="table-scroll">
               <table className="table">
@@ -450,8 +456,8 @@ export default function AdminConnector() {
                 <tbody>
                   {audit.data.map((a: AuditEntry) => (
                     <tr key={a.id}>
-                      <td className="num nowrap">{fmtWhen(a.at)}</td>
-                      <td><code>{a.tool}</code></td>
+                      <td className="num nowrap">{formatDayTime(a.at)}</td>
+                      <td><code className="mono">{a.tool}</code></td>
                       <td><span className={'badge ' + (a.status === 'ok' ? 'badge-ok' : a.status === 'replayed' ? '' : 'badge-red')}>{a.status.replace('_', ' ')}</span></td>
                       <td>{a.summary}</td>
                     </tr>
@@ -468,12 +474,12 @@ export default function AdminConnector() {
           <ol className="steps">
             <li><strong>Check your ChatGPT plan.</strong> Custom connectors need a paid plan. Business, Enterprise and Edu are confirmed; whether Plus and Pro allow changes (not only reading) is reported differently by different sources, so test on your own account first.</li>
             <li><strong>Turn on developer mode.</strong> In ChatGPT open Settings, then Apps, then Advanced settings, then Developer mode. OpenAI has moved this around: it may be under Settings, Connectors, Advanced, or on the Plugins page with "Add custom MCP server".</li>
-            <li><strong>Add the connector.</strong> Choose to add a custom connector and paste your studio address: <code>https://your-domain.co.za/mcp</code>.</li>
+            <li><strong>Add the connector.</strong> Choose to add a custom connector and paste your studio address: <code className="mono">https://your-domain.co.za/mcp</code>.</li>
             <li><strong>Sign in as the owner.</strong> A studio page opens. Enter your password and your 6-digit 2FA code.</li>
             <li><strong>Choose what ChatGPT may do.</strong> Tick only the permissions you want: see the diary, look up clients, book and cancel, add sessions. You can start read-only.</li>
             <li><strong>Try it.</strong> Ask "Who's booked today?" Approve any change ChatGPT asks to make.</li>
           </ol>
-          <p className="hint">The live connector needs the studio hosted on a real domain with the PHP backend. See <a href="#/go-live">What it takes to go live</a>.</p>
+          <p className="hint measure">The live connector needs the studio hosted on a real domain with the PHP backend. See <a href="#/go-live">What it takes to go live</a>.</p>
         </section>
 
         <section className="card" aria-labelledby="h-sec">
@@ -498,7 +504,7 @@ export default function AdminConnector() {
           onClose={() => setRevoking(null)}
           actions={
             <>
-              <button className="btn btn-red" onClick={revoke}>Revoke access</button>
+              <button className="btn btn-danger" onClick={revoke}>Revoke access</button>
               <button className="btn btn-ghost" onClick={() => setRevoking(null)}>Keep connected</button>
             </>
           }
@@ -512,7 +518,7 @@ export default function AdminConnector() {
           onClose={() => setResetting(false)}
           actions={
             <>
-              <button className="btn btn-red" onClick={async () => { await api.demoReset?.(); window.location.hash = '#/login'; window.location.reload(); }}>Reset demo data</button>
+              <button className="btn btn-danger" onClick={async () => { await api.demoReset?.(); window.location.hash = '#/login'; window.location.reload(); }}>Reset demo data</button>
               <button className="btn btn-ghost" onClick={() => setResetting(false)}>Cancel</button>
             </>
           }

@@ -7,11 +7,11 @@ export default function PageHeader({ eyebrow, title, actions, children }: Props)
   return (
     <header className="tse-pagehead">
       <div>
-        {eyebrow && <div className="eyebrow red">{eyebrow}</div>}
-        <h1 className="display tse-pagehead-title">{title}</h1>
+        {eyebrow && <div className="eyebrow">{eyebrow}</div>}
+        <h1 className="page-title tse-pagehead-title">{title}</h1>
         {children && <p className="muted tse-pagehead-sub">{children}</p>}
       </div>
-      {actions && <div className="row">{actions}</div>}
+      {actions && <div className="row tse-pagehead-actions">{actions}</div>}
     </header>
   );
 }

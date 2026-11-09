@@ -1,15 +1,19 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../../data/api';
-import { addDays, formatLocalDate, formatLocalDateTime, formatLocalTime, localDayKeyMs } from '../../domain/slots';
+import { addDays, localDayKeyMs } from '../../domain/slots';
 import { ApiError, type Booking, type Settings, type Slot } from '../../domain/types';
 import ClientFrame from '../../components/ClientFrame';
+import { BookSkel } from '../../components/ClientSkeletons';
 import EmptyState from '../../components/EmptyState';
+import ErrorState from '../../components/ErrorState';
 import Icon from '../../components/Icon';
+import { downloadBookingIcs } from '../../components/ics';
 import Modal from '../../components/Modal';
 import PageHeader from '../../components/PageHeader';
 import SlotPicker from '../../components/SlotPicker';
 import { useToast } from '../../components/Toast';
+import { formatDay, formatDayTime, formatTimeRange } from '../../lib/format';
 import './client.css';
 
 function BookInner() {
@@ -17,6 +21,7 @@ function BookInner() {
   const [slots, setSlots] = useState<Slot[] | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
+  const [mine, setMine] = useState<Booking[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -24,14 +29,17 @@ function BookInner() {
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
+    setError('');
     try {
       const today = localDayKeyMs(Date.now());
-      const [sl, bal, st] = await Promise.all([api.availability(today, addDays(today, 27)), api.myBalance(), api.settings()]);
+      const [sl, bal, st, bk] = await Promise.all([api.availability(today, addDays(today, 27)), api.myBalance(), api.settings(), api.myBookings()]);
       setSlots(sl);
       setBalance(bal);
       setSettings(st);
+      const now = Date.now();
+      setMine(bk.filter((b) => b.status === 'confirmed' && new Date(b.end).getTime() > now));
     } catch {
-      setError('Could not load times. Refresh to try again.');
+      setError('Could not load times.');
     }
   }, []);
   useEffect(() => void load(), [load]);
@@ -51,7 +59,7 @@ function BookInner() {
         setSelected(null);
         void load();
       } else if (e instanceof ApiError && e.code === 'no_credits') {
-        toast.push('You have no sessions left. Load a pack first.', 'error');
+        toast.push('You have no sessions left. Buy sessions first.', 'error');
         void load();
       } else {
         toast.push(e instanceof ApiError ? e.message : 'Could not book. Try again.', 'error');
@@ -63,46 +71,65 @@ function BookInner() {
 
   if (done) {
     return (
-      <div className="card card-red-top tse-success rise">
+      <div className="card tse-success rise">
         <div className="tse-success-mark"><Icon name="check" size={26} /></div>
-        <h2 className="display" style={{ fontSize: 44 }}>You are booked</h2>
-        <p className="h3 num">{formatLocalDateTime(done.start)}</p>
-        <p className="muted" style={{ margin: 0 }}>Added to Ivan's calendar. See you at the studio in Brackenfell.</p>
+        <h1 className="page-title">You are booked</h1>
+        <p className="h3 num">{formatDayTime(done.start)}</p>
+        <p className="muted measure" style={{ margin: 0 }}>Added to Ivan's calendar.</p>
+        <p className="small silver measure" style={{ margin: 0 }}>Brackenfell, Cape Town · exact address in your confirmation email</p>
         <div className="row">
           <Link to="/app/bookings" className="btn btn-red">My bookings</Link>
-          <button type="button" className="btn btn-ghost" onClick={() => { setDone(null); void load(); }}>Book another</button>
+          <button type="button" className="btn btn-ghost" onClick={() => downloadBookingIcs(done)}>
+            <Icon name="download" size={18} /> Add to my calendar
+          </button>
+          <button type="button" className="btn btn-quiet" onClick={() => { setDone(null); void load(); }}>Book another</button>
         </div>
       </div>
     );
   }
 
-  if (error) return <p className="error-text" role="alert">{error}</p>;
-  if (!slots || balance === null || !settings) return <div aria-busy="true" style={{ minHeight: 320 }} />;
+  if (error) {
+    return (
+      <>
+        <PageHeader eyebrow="Book" title="Pick a time" />
+        <ErrorState message={error} onRetry={() => void load()} />
+      </>
+    );
+  }
+  if (!slots || balance === null || !settings) return <BookSkel />;
 
   if (balance < 1) {
     return (
-      <EmptyState icon="plus" title="Load sessions to book" action={<Link to="/app/packs" className="btn btn-red">Load sessions</Link>}>
-        You have no sessions left. Load a pack, then pick your time.
-      </EmptyState>
+      <>
+        <PageHeader eyebrow="Book" title="Pick a time" />
+        <EmptyState icon="plus" title="Buy sessions to book" action={<Link to="/app/packs" className="btn btn-red">Buy sessions</Link>}>
+          You have no sessions left. Buy a pack, then pick your time.
+        </EmptyState>
+      </>
     );
   }
 
   const sel = selected ? slots.find((s) => s.start === selected) : null;
   return (
-    <div className="tse-stack rise">
-      <p className="muted" style={{ margin: 0 }}>
-        {settings.sessionMinutes} minute sessions. Times are Cape Town time. You have <strong className="num" style={{ color: 'var(--white)' }}>{balance}</strong> session{balance === 1 ? '' : 's'} left.
-      </p>
-      {slots.length === 0 ? (
-        <EmptyState icon="calendar" title="No free times right now">Ivan's diary is full for the next four weeks. Message him on WhatsApp.</EmptyState>
-      ) : (
-        <SlotPicker slots={slots} value={selected} onChange={setSelected} weeks={4} />
-      )}
-      <div className="row" style={{ position: 'sticky', bottom: 0, background: 'var(--ink)', padding: 'var(--s3) 0', borderTop: '1px solid var(--line)' }}>
-        <span className="num silver" style={{ flex: 1, minWidth: 140 }}>
-          {sel ? `${formatLocalDate(sel.start)} · ${formatLocalTime(sel.start)}` : 'Pick a time'}
-        </span>
-        <button type="button" className="btn btn-red" disabled={!sel} onClick={() => setConfirm(true)}>Continue</button>
+    <div className="rise">
+      <PageHeader eyebrow="Book" title="Pick a time">
+        {settings.sessionMinutes}-minute sessions · Cape Town time · You have {balance} session{balance === 1 ? '' : 's'} left
+      </PageHeader>
+      <div className="tse-stack">
+        {slots.length === 0 ? (
+          <EmptyState icon="calendar" title="No free times right now" action={<button type="button" className="btn btn-ghost" onClick={() => void load()}>Check again</button>}>
+            Ivan's diary is full for the next four weeks.
+          </EmptyState>
+        ) : (
+          <SlotPicker
+            slots={slots}
+            value={selected}
+            onChange={(s) => { setSelected(s); setConfirm(true); }}
+            settings={settings}
+            mine={mine}
+            weeks={4}
+          />
+        )}
       </div>
 
       <Modal
@@ -119,8 +146,8 @@ function BookInner() {
         {sel && (
           <>
             <dl className="tse-confirm-rows">
-              <div><dt>Date</dt><dd className="num">{formatLocalDate(sel.start)}</dd></div>
-              <div><dt>Time</dt><dd className="num">{formatLocalTime(sel.start)} to {formatLocalTime(sel.end)}</dd></div>
+              <div><dt>Date</dt><dd className="num">{formatDay(sel.start)}</dd></div>
+              <div><dt>Time</dt><dd className="num">{formatTimeRange(sel.start, sel.end)}</dd></div>
               <div><dt>Length</dt><dd>{settings.sessionMinutes} minutes</dd></div>
               <div><dt>Cost</dt><dd>Uses 1 session, {balance - 1} left after</dd></div>
             </dl>
@@ -137,7 +164,6 @@ function BookInner() {
 export default function Book() {
   return (
     <ClientFrame>
-      <PageHeader eyebrow="Book" title="Pick a time">Move better. Recover faster. Feel stronger.</PageHeader>
       <BookInner />
     </ClientFrame>
   );

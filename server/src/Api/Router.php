@@ -168,6 +168,9 @@ final class Router implements RouteHandler
 
     private function csrf(): HttpResponse
     {
+        if (!$this->app->rateLimiter()->hit('csrf_ip', $this->req->ip, 30, 60)) {
+            throw new DomainError('rate_limited', 'Too many requests. Please wait a moment and try again.');
+        }
         return $this->ok(['token' => $this->app->auth()->csrfToken()]);
     }
 
@@ -200,6 +203,7 @@ final class Router implements RouteHandler
             throw new DomainError('validation', 'Please accept the privacy terms to create an account.');
         }
         if ($db->val('SELECT 1 FROM users WHERE email = ?', [$email]) !== null) {
+            $this->app->auth()::hashPassword($password); // same work as a real sign-up, so timing does not reveal the account
             throw new DomainError('validation', 'We could not create that account. If you already have one, please sign in.');
         }
         $id = $db->newId();
@@ -219,10 +223,10 @@ final class Router implements RouteHandler
     private function login(): HttpResponse
     {
         $in = $this->in();
-        $email = $in->str('email', 1, 190);
+        $email = $in->email(); // same validator as signup: ASCII only, so look-alike spellings never reach the limiters
         $password = $in->secret('password', 1);
         $auth = $this->app->auth();
-        $user = $auth->verifyPassword((string) $email, $password, $this->req->ip);
+        $user = $auth->verifyPassword($email, $password, $this->req->ip);
         if ($user === null) {
             throw new DomainError('unauthorized', 'Incorrect email or password.');
         }
@@ -519,8 +523,15 @@ final class Router implements RouteHandler
     private function cronSync(): HttpResponse
     {
         $expected = (string) $this->app->config()->get('cron.token', '');
+        if (strlen($expected) < 32 || stripos($expected, 'CHANGE_ME') !== false) {
+            // A missing, short or placeholder token means the HTTP cron is switched off (CLI cron needs no token).
+            return HttpResponse::json(['error' => ['code' => 'unavailable', 'message' => 'The HTTP cron endpoint is not configured.']], 503);
+        }
+        if (!$this->app->rateLimiter()->hit('cron_ip', $this->req->ip, 10, 60)) {
+            throw new DomainError('rate_limited', 'Too many requests.');
+        }
         $given = (string) ($this->req->header('x-cron-token') ?? '');
-        if ($expected === '' || !hash_equals($expected, $given)) {
+        if (!hash_equals($expected, $given)) {
             throw new DomainError('forbidden', 'Invalid cron token.');
         }
         return $this->ok(['ok' => true] + $this->app->maintenance()->run());

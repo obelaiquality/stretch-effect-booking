@@ -186,7 +186,7 @@ final class App implements Services
 
     public function maintenance(): Maintenance
     {
-        return $this->lazy(Maintenance::class, fn () => new Maintenance($this->db(), $this->settings(), $this->google()));
+        return $this->lazy(Maintenance::class, fn () => new Maintenance($this->db(), $this->settings(), $this->google(), $this->varDir() . '/sessions'));
     }
 
     public function now(): DateTimeImmutable

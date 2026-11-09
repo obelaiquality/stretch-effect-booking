@@ -228,7 +228,7 @@ final class OAuthRoutes implements RouteHandler
             return $fail('unsupported_response_type', 'Only response_type=code is supported.');
         }
         $challenge = $this->str($q['code_challenge'] ?? '');
-        if (preg_match('/^[A-Za-z0-9_-]{43}$/', $challenge) !== 1) {
+        if (preg_match('/^[A-Za-z0-9_-]{43}$/D', $challenge) !== 1) {
             return $fail('invalid_request', 'A PKCE code_challenge (S256) is required.');
         }
         if ($this->str($q['code_challenge_method'] ?? '') !== 'S256') {
@@ -477,7 +477,7 @@ final class OAuthRoutes implements RouteHandler
             || !hash_equals((string) $row['redirect_uri'], $redirect)) {
             return $this->oauthError('invalid_grant', 'The code is invalid or expired.');
         }
-        if (preg_match('/^[A-Za-z0-9._~-]{43,128}$/', $verifier) !== 1) {
+        if (preg_match('/^[A-Za-z0-9._~-]{43,128}$/D', $verifier) !== 1) {
             return $this->oauthError('invalid_grant', 'code_verifier is missing or malformed.');
         }
         $computed = rtrim(strtr(base64_encode(hash('sha256', $verifier, true)), '+/', '-_'), '=');

@@ -1,3 +1,4 @@
+import { formatRand } from '../../lib/format';
 import type { LedgerReason } from '../../domain/types';
 
 export const REASON_LABEL: Record<LedgerReason, string> = {
@@ -9,6 +10,6 @@ export const REASON_LABEL: Record<LedgerReason, string> = {
   welcome_offer: 'Welcome offer',
 };
 
-export const money = (n: number) => `R${n.toLocaleString('en-ZA').replace(/\s/g, ',')}`;
+export const money = formatRand;
 
 export const firstName = (name: string) => name.split(' ')[0] ?? name;

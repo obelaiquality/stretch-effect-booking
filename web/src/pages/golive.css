@@ -9,12 +9,19 @@
   border-top: 1px solid var(--line);
 }
 .gl-title {
-  font-family: var(--font-display);
-  text-transform: uppercase;
-  font-weight: 400;
-  font-size: clamp(28px, 4.5vw, 44px);
-  line-height: 1;
-  margin: var(--s2) 0 var(--s5);
+  margin: 0 0 var(--s5);
+}
+.gl-cell {
+  max-width: 68ch;
+  margin-top: 2px;
+}
+.gl-actions .btn {
+  min-width: 200px;
+}
+@media (max-width: 639px) {
+  .gl-actions .btn {
+    width: 100%;
+  }
 }
 .gl-cols {
   display: grid;
@@ -47,7 +54,7 @@
   font-family: var(--font-display);
   font-size: 32px;
   line-height: 1;
-  color: var(--red);
+  color: var(--silver);
 }
 .gl-timeline p {
   margin: 4px 0 0;
@@ -86,5 +93,5 @@
   top: 0.6em;
   width: 8px;
   height: 2px;
-  background: var(--red);
+  background: var(--silver);
 }

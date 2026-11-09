@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace StretchEffect\OAuth;
 
 use StretchEffect\Contracts\Services;
+use StretchEffect\Support\Time;
 
 /** OAuth client registration (RFC 7591 DCR) and Client ID Metadata Documents (CIMD). Public clients only. */
 final class ClientRegistry
@@ -12,6 +13,8 @@ final class ClientRegistry
     public const MAX_NAME = 100;
     private const CIMD_CACHE_SECONDS = 3600;
     private const MAX_CLIENTS = 500;
+    /** A DCR client that never got a grant is dropped after this many seconds (strangers cannot fill the cap for good). */
+    public const UNUSED_TTL_SECONDS = 86400;
 
     public function __construct(private Services $s, private CimdFetcher $fetcher) {}
 
@@ -55,7 +58,8 @@ final class ClientRegistry
             }
             if (str_starts_with($uri, $prefix)) {
                 $rest = substr($uri, strlen($prefix));
-                if (preg_match('/^[A-Za-z0-9._~-]{1,128}$/', $rest) === 1) {
+                // '.' and '..' match the character class but are dot segments, which browsers resolve away
+                if (preg_match('/^[A-Za-z0-9._~-]{1,128}$/D', $rest) === 1 && $rest !== '.' && $rest !== '..') {
                     return true;
                 }
             }
@@ -90,6 +94,17 @@ final class ClientRegistry
         return $n === '' ? 'Unnamed app' : $n;
     }
 
+    /** True when every element is one of the allowed strings (array_diff would warn on nested arrays). @param list<string> $allowed */
+    private static function allIn(array $values, array $allowed): bool
+    {
+        foreach ($values as $v) {
+            if (!is_string($v) || !in_array($v, $allowed, true)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     // ---------------------------------------------------------------- DCR
 
     /**
@@ -104,18 +119,27 @@ final class ClientRegistry
             throw new \InvalidArgumentException('only public clients are supported (token_endpoint_auth_method none)');
         }
         $grants = $meta['grant_types'] ?? ['authorization_code', 'refresh_token'];
-        if (!is_array($grants) || array_diff($grants, ['authorization_code', 'refresh_token']) !== []) {
+        if (!is_array($grants) || !self::allIn($grants, ['authorization_code', 'refresh_token'])) {
             throw new \InvalidArgumentException('unsupported grant_types');
         }
         $resp = $meta['response_types'] ?? ['code'];
-        if (!is_array($resp) || array_diff($resp, ['code']) !== []) {
+        if (!is_array($resp) || !self::allIn($resp, ['code'])) {
             throw new \InvalidArgumentException('unsupported response_types');
         }
         $uris = $this->validateRedirects($meta['redirect_uris'] ?? null);
         $name = self::sanitizeName($meta['client_name'] ?? '');
 
         $pdo = $this->s->db()->pdo();
-        $count = (int) $pdo->query("SELECT COUNT(*) FROM oauth_clients WHERE registration = 'dcr'")->fetchColumn();
+        $cutoff = Time::toDb($this->s->db()->now()->modify('-' . self::UNUSED_TTL_SECONDS . ' seconds'));
+        // Only clients that are younger than 24 h or have a grant count toward the cap; stale unused ones are pruned on the way.
+        $counted = "SELECT COUNT(*) FROM oauth_clients c WHERE c.registration = 'dcr' AND (c.created_at >= ? OR EXISTS (SELECT 1 FROM oauth_grants g WHERE g.client_id = c.client_id))";
+        // stale unused rows are pruned once the table is 90% of the cap in size, before counting
+        if ((int) $pdo->query("SELECT COUNT(*) FROM oauth_clients WHERE registration = 'dcr'")->fetchColumn() >= self::MAX_CLIENTS * 0.9) {
+            self::pruneUnused($pdo, $cutoff);
+        }
+        $st = $pdo->prepare($counted);
+        $st->execute([$cutoff]);
+        $count = (int) $st->fetchColumn();
         if ($count >= self::MAX_CLIENTS) {
             throw new \OverflowException('registration capacity reached');
         }
@@ -133,6 +157,14 @@ final class ClientRegistry
             'grant_types' => ['authorization_code', 'refresh_token'],
             'response_types' => ['code'],
         ];
+    }
+
+    /** Delete DCR clients created before $cutoffDb that never had a grant. @return int rows deleted */
+    public static function pruneUnused(\PDO $pdo, string $cutoffDb): int
+    {
+        $st = $pdo->prepare("DELETE FROM oauth_clients WHERE registration = 'dcr' AND created_at < ? AND client_id NOT IN (SELECT client_id FROM oauth_grants)");
+        $st->execute([$cutoffDb]);
+        return $st->rowCount();
     }
 
     // ---------------------------------------------------------------- lookup (DCR row or CIMD document)

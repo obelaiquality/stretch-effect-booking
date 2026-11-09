@@ -1,14 +1,17 @@
 /* The Stretch Effect design tokens. Components use these; no new raw hex values elsewhere. */
 :root {
-  --ink: #0a0a0b;
-  --panel: #131315;
-  --panel-2: #1b1b1e;
+  --ink: #0b0b0c;
+  --panel: #141416;
+  --panel-2: #1c1c1f;
+  --panel-3: #26262a;
   --line: #2a2a2f;
-  --line-2: #3a3a40;
+  --line-2: #3a3a40; /* decorative only */
+  --edge: #6a6a72; /* control boundaries, 3:1+ on ink and panel */
   --red: #c8102e;
   --red-hi: #e01a36;
   --red-deep: #7d0a1b;
   --red-wash: rgba(200, 16, 46, 0.12);
+  --red-text: #ff4d63; /* small red text: errors, destructive labels (6.1:1) */
   --silver: #c9ccd2;
   --white: #f4f4f2;
   --muted: #8d8d95;
@@ -44,6 +47,14 @@
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   --t-fast: 150ms;
   --t-med: 250ms;
+
+  --fs-display: clamp(48px, 8vw, 96px);
+  --fs-title: clamp(40px, 5.5vw, 64px);
+  --fs-h2: clamp(32px, 4vw, 48px);
+  --fs-figure: clamp(64px, 10vw, 96px);
+  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --shadow-float: 0 12px 32px rgba(0, 0, 0, 0.5);
+  --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
 
   --maxw: 1200px;
   --gutter: 16px;

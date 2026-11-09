@@ -9,12 +9,26 @@ use StretchEffect\Support\Time;
 
 final class AuditLog implements AuditLogContract
 {
+    /** Rows of these kinds are kept 365 days instead of 180 (sign-in and connector events; anonymous failures are not, they are the flood). */
+    public const LONG_KEPT_SQL = "(action LIKE 'oauth%' OR action LIKE 'connector%' OR action LIKE 'auth.%' OR action LIKE 'mcp%' OR action IN ('code_reuse','refresh_reuse'))"
+        . " AND NOT (grant_id IS NULL AND actor = 'anonymous' AND status IN ('denied','rate_limited'))";
+
+    /** Anonymous denied / throttled rows written per IP per hour; beyond this nothing more is stored (the limiters still act). */
+    public const ANON_FAILURES_PER_IP_HOUR = 20;
+
     public function __construct(private readonly Db $db)
     {
     }
 
     public function write(?string $grantId, string $actor, string $action, array $args, string $status, string $summary, ?string $ip): void
     {
+        if ($grantId === null && $actor === 'anonymous' && in_array($status, ['denied', 'rate_limited'], true) && $ip !== null
+            && (int) $this->db->val(
+                "SELECT COUNT(*) FROM audit_log WHERE ip = ? AND grant_id IS NULL AND actor = 'anonymous' AND status IN ('denied','rate_limited') AND at >= ?",
+                [mb_substr($ip, 0, 45), Time::toDb($this->db->now()->modify('-1 hour'))]
+            ) >= self::ANON_FAILURES_PER_IP_HOUR) {
+            return;
+        }
         $this->db->run(
             'INSERT INTO audit_log (id, at, grant_id, actor, action, args_json, status, summary, ip) VALUES (?,?,?,?,?,?,?,?,?)',
             [

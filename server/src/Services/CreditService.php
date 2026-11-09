@@ -51,18 +51,30 @@ final class CreditService implements CreditServiceContract
 
     public function chatgptAddedToday(): int
     {
+        return $this->chatgptChangedToday(true);
+    }
+
+    /** Sessions removed through ChatGPT today (South African day), as a positive number. */
+    public function chatgptRemovedToday(): int
+    {
+        return $this->chatgptChangedToday(false);
+    }
+
+    private function chatgptChangedToday(bool $added): int
+    {
         $tz = Time::tz();
         $start = $this->db->now()->setTimezone($tz)->setTime(0, 0);
         $end = $start->modify('+1 day');
-        return (int) $this->db->val(
-            "SELECT COALESCE(SUM(delta), 0) FROM credit_ledger WHERE reason = 'chatgpt_adjust' AND delta > 0 AND created_at >= ? AND created_at < ?",
+        $sum = (int) $this->db->val(
+            "SELECT COALESCE(SUM(delta), 0) FROM credit_ledger WHERE reason = 'chatgpt_adjust' AND delta " . ($added ? '> 0' : '< 0') . ' AND created_at >= ? AND created_at < ?',
             [Time::toDb($start), Time::toDb($end)]
         );
+        return $added ? $sum : -$sum;
     }
 
     public function markPackPaid(string $packRequestId, ?string $paymentReference, string $actor): array
     {
-        $ref = $paymentReference === null ? null : PaymentReferences::normalize($paymentReference);
+        $ref = $paymentReference === null ? null : PaymentReferences::canonical($paymentReference);
         $ref = $ref === '' ? null : $ref;
         return $this->db->transaction(function () use ($packRequestId, $ref, $actor): array {
             $pack = $this->db->one('SELECT * FROM pack_requests WHERE id = ?' . $this->db->forUpdate(), [$packRequestId]);

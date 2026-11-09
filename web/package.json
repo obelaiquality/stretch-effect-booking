@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:fuzz": "vitest run src/domain/*.fuzz.test.ts src/data/*.fuzz.test.ts",
+    "test:mutation": "FC_RUNS=${FC_RUNS:-40} stryker run"
   },
   "dependencies": {
     "react": "^18.3.1",
@@ -16,10 +18,13 @@
     "react-router-dom": "^6.28.0"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "9.6.1",
+    "@stryker-mutator/vitest-runner": "9.6.1",
     "@types/node": "^22.10.2",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.4",
+    "fast-check": "4.10.2",
     "typescript": "^5.6.3",
     "vite": "^5.4.11",
     "vitest": "^2.1.8"

@@ -7,13 +7,18 @@ namespace StretchEffect\Mcp;
 final class Redactor
 {
     public const FREE_TEXT_MAX = 40;
+    public const MAX_KEYS = 20;
 
     /** @param array<string,mixed> $args @return array<string,mixed> */
     public static function redact(array $args): array
     {
         $out = [];
         foreach ($args as $k => $v) {
-            $key = (string) $k;
+            // argument names are attacker-chosen too: keep them short and plain, and cap how many are written
+            $key = mb_substr(preg_replace('/[^\w.-]/u', '?', (string) $k) ?? '', 0, 40);
+            if (count($out) >= self::MAX_KEYS) {
+                break;
+            }
             if (is_int($v) || is_float($v) || is_bool($v) || $v === null) {
                 $out[$key] = $v;
             } elseif (is_string($v)) {

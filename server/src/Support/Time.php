@@ -51,7 +51,7 @@ final class Time
     /** Parse an ISO 8601 instant with Z or offset. Null when invalid. */
     public static function parseIso(string $s): ?DateTimeImmutable
     {
-        if (!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/', $s)) {
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/D', $s)) {
             return null;
         }
         try {
@@ -64,6 +64,10 @@ final class Time
     /** "Y-m-d" -> local midnight (Africa/Johannesburg). Null when invalid. */
     public static function localDate(string $s): ?DateTimeImmutable
     {
+        // createFromFormat() throws a ValueError on a NUL byte, which would surface as HTTP 500 from ?from=2026-11-09%00
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/D', $s) !== 1) {
+            return null;
+        }
         $d = DateTimeImmutable::createFromFormat('!Y-m-d', $s, self::tz());
         if ($d === false || $d->format('Y-m-d') !== $s) {
             return null;

@@ -6,6 +6,11 @@
   <testsuites>
     <testsuite name="server">
       <directory suffix="Test.php">tests</directory>
+      <exclude>tests/Fuzz</exclude>
+    </testsuite>
+    <!-- Seeded fuzzing, see docs/TESTING.md. Not part of the default run. -->
+    <testsuite name="fuzz">
+      <directory suffix="Test.php">tests/Fuzz</directory>
     </testsuite>
   </testsuites>
 </phpunit>
